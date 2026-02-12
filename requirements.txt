@@ -1,0 +1,23 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn==0.27.0
+python-multipart==0.0.6
+
+# Database & Migrations
+sqlalchemy==2.0.25
+alembic==1.13.1
+# Use psycopg2-binary for PostgreSQL or pymysql for MySQL
+psycopg2-binary==2.9.9
+pymysql==1.1.0
+
+# Security & Authentication
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+python-dotenv==1.0.0
+
+# Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Utilities
+typing-extensions==4.9.0

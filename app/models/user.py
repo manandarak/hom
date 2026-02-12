@@ -1,0 +1,26 @@
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, BigInteger
+from sqlalchemy.orm import relationship
+from src.app.core.database import Base
+
+class Role(Base):
+    __tablename__ = "roles"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(BigInteger, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+
+    role_id = Column(Integer, ForeignKey("roles.id"))
+
+    # Hierarchy Scoping
+    assigned_zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
+    assigned_region_id = Column(Integer, ForeignKey("region.id"), nullable=True)
+    assigned_area_id = Column(Integer, ForeignKey("area.id"), nullable=True)
+    assigned_territory_id = Column(Integer, ForeignKey("territory.id"), nullable=True)
+
+    role = relationship("Role")
