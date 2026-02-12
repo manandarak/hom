@@ -18,4 +18,4 @@ class AuthService:
     def generate_token(user_username: str):
         # This calls the function you imported from security.py
         # Make sure the parameter name matches (subject vs data)
-        return create_access_token(data={"sub": user_username})
+        return create_access_token(subject=user_username)
