@@ -10,16 +10,16 @@ class SuperStockist(Base):
     id = Column(Integer, primary_key=True, index=True)
     zone_id = Column(Integer, ForeignKey("zone.id"), nullable=False)
 
-    # Your original fields
+
     firm_name = Column(String(150), nullable=True)
     credit_limit = Column(DECIMAL(12, 2), nullable=True)
 
-    # The new fields we just added!
+
     contact_number = Column(String(20), nullable=True)
     gstin = Column(String(50), nullable=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
 
-    # Relationships
+
     zone = relationship("Zone")
     user = relationship("User")
 
@@ -34,14 +34,14 @@ class Distributor(Base):
     is_direct_party = Column(Boolean, default=False)
     firm_name = Column(String(150), nullable=True)
 
-    # Fields added via ALTER
+
     contact_number = Column(String(20))
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
 
     user = relationship("User")
     super_stockist = relationship("SuperStockist")
-   
+
 
 
 class Retailer(Base):
@@ -54,7 +54,7 @@ class Retailer(Base):
     shop_name = Column(String(150), nullable=True)
     shop_type = Column(String(100), nullable=True)
 
-    # Fields added via ALTER
+
     contact_number = Column(String(20))
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)

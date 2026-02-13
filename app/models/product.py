@@ -1,14 +1,25 @@
-from sqlalchemy import Column, Integer, String, DECIMAL
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, Text
 from src.app.core.database import Base
 
 
 class ProductMaster(Base):
     __tablename__ = "product_master"
-    __table_args__ = {'extend_existing': True}  # <--- Add this
+    __table_args__ = {'extend_existing': True}  # <--- ADD THIS LINE
 
     id = Column(Integer, primary_key=True, index=True)
-    sku_code = Column(String(50), unique=True, index=True)
-    name = Column(String(255), nullable=False)
-    mrp = Column(DECIMAL(10, 2))
-    base_price = Column(DECIMAL(10, 2))
-    units_per_case = Column(Integer, default=1)
+
+    # Identification
+    sku_code = Column(String(50), unique=True, index=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    category = Column(String(100))
+    description = Column(Text, nullable=True)
+
+    # Financials (Using Numeric for exact decimal precision in pricing)
+    mrp = Column(Numeric(10, 2), nullable=False)  # Maximum Retail Price
+    base_price = Column(Numeric(10, 2), nullable=False)  # Factory/Transfer price
+    gst_percent = Column(Integer, default=18)
+
+    # Logistics (Crucial for Supply Chain)
+    units_per_case = Column(Integer, default=1, nullable=False)
+
+    is_active = Column(Boolean, default=True)

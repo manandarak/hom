@@ -1,23 +1,23 @@
-import decimal
-from pydantic import BaseModel, ConfigDict, Field
-from decimal import Decimal
+from pydantic import BaseModel
 from typing import Optional
-
+from decimal import Decimal
 
 class ProductBase(BaseModel):
     sku_code: str
     name: str
-    base_price: Decimal
-    mrp: Optional[Decimal] = None
+    category: Optional[str] = None
     description: Optional[str] = None
-
+    mrp: Decimal
+    base_price: Decimal
+    gst_percent: int = 18
+    units_per_case: int = 1
+    is_active: bool = True
 
 class ProductCreate(ProductBase):
-    stock_quantity: int = 0
+    pass
 
-
-class ProductRead(ProductBase):
+class ProductResponse(ProductBase):
     id: int
-    stock_quantity: Optional[int] = 0
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True  # Use orm_mode = True if using Pydantic v1

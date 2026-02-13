@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 class StockUpdate(BaseModel):
@@ -17,3 +17,10 @@ class StockLedgerRead(BaseModel):
     quantity_change: int
     closing_balance: int
     model_config = ConfigDict(from_attributes=True)
+
+class ProductionLogCreate(BaseModel):
+    product_id: int
+    factory_id: int
+    quantity_produced: int
+    batch_number: str
+    production_date: date

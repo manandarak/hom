@@ -1,21 +1,56 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-from src.app.schemas.inventory import StockUpdate, StockLedgerRead
-from src.app.services.stock_service import StockService
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from src.app.schemas.inventory import ProductionLogCreate
+from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger
 
 router = APIRouter()
 
-@router.post("/adjust")
-def adjust_stock(data: StockUpdate, db: Session = Depends(get_db)):
-    # This calls the "Brain" (Service) to update Snapshot + Ledger
-    return StockService.update_stock(
-        db,
-        entity_type="Distributor",
-        entity_id=1, # Example ID
-        product_id=data.product_id,
-        qty_change=data.quantity_change,
-        ref_doc=data.reference_document,
-        trans_type="Adjustment"
+
+@router.post("/factory/produce", status_code=201)
+def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(get_db)):
+    # 1. Log the production event
+    production_log = DailyProductionLog(
+        product_id=log_in.product_id,
+        factory_id=log_in.factory_id,
+        quantity=log_in.quantity_produced,
+        batch_number=log_in.batch_number,
+        date=log_in.production_date
     )
+    db.add(production_log)
+
+    # 2. Update the Factory Inventory (Upsert logic)
+    factory_stock = db.query(FactoryInventory).filter(
+        FactoryInventory.product_id == log_in.product_id,
+        FactoryInventory.factory_id == log_in.factory_id
+    ).first()
+
+    if factory_stock:
+        factory_stock.quantity += log_in.quantity_produced
+    else:
+        factory_stock = FactoryInventory(
+            product_id=log_in.product_id,
+            factory_id=log_in.factory_id,
+            quantity=log_in.quantity_produced
+        )
+        db.add(factory_stock)
+
+    # 3. Write to the immutable Stock Ledger
+    ledger_entry = StockLedger(
+        product_id=log_in.product_id,
+        from_entity_type="SYSTEM",  # Originated from manufacturing
+        from_entity_id=0,
+        to_entity_type="FACTORY",
+        to_entity_id=log_in.factory_id,
+        transaction_type="PRODUCTION",
+        quantity=log_in.quantity_produced
+    )
+    db.add(ledger_entry)
+
+    # Commit all three actions as a single atomic transaction
+    db.commit()
+
+    return {"message": f"Successfully produced {log_in.quantity_produced} units."}
 

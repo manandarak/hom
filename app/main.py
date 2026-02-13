@@ -73,15 +73,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- ROUTERS ---
 
-# Auth & Identity
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["01. Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["02. User Management"])
 
 # Masters (Geo & Products)
 app.include_router(geography.router, prefix="/api/v1/geo", tags=["03. Geography"])
-app.include_router(product.router, prefix="/api/v1/products", tags=["04. Product Master"])
+app.include_router(product.router, prefix="/api/v1/products",  tags=["04. Products"])
 
 # Supply Chain Operations
 app.include_router(production.router, prefix="/api/v1/production", tags=["05. Factory Production"])
@@ -110,5 +108,4 @@ def root():
 if __name__ == "__main__":
     import uvicorn
 
-    # Note: 'reload=True' is great for dev, but turn it off in production!
     uvicorn.run("src.app.main:app", host="127.0.0.1", port=8000, reload=True)

@@ -1,15 +1,7 @@
-from sqlalchemy import Column, Integer, String, DECIMAL, ForeignKey, BigInteger, DateTime, func
+from sqlalchemy import Column, Integer, String, DECIMAL, ForeignKey, BigInteger, DateTime, Date, func
 from sqlalchemy.orm import relationship
 from src.app.core.database import Base
-
-class ProductMaster(Base):
-    __tablename__ = "product_master"
-    id = Column(Integer, primary_key=True, index=True)
-    sku_code = Column(String, unique=True, index=True)
-    name = Column(String, nullable=False)
-    mrp = Column(DECIMAL(10, 2))
-    base_price = Column(DECIMAL(10, 2))
-    units_per_case = Column(Integer, default=1)
+from datetime import datetime, date
 
 class StockLedger(Base):
     """The History of Truth - Every movement is recorded here"""
@@ -44,3 +36,30 @@ class DistributorInventory(Base):
     distributor_id = Column(Integer, ForeignKey("distributor.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
     current_stock_qty = Column(Integer, default=0)
+
+
+class FactoryMaster(Base):
+    __tablename__ = "factory_master"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    location = Column(String(100))
+    # Add other columns if your MySQL table has them,
+    # but this is enough to satisfy the Foreign Key!
+
+
+class DailyProductionLog(Base):
+    __tablename__ = "daily_production_log"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("product_master.id"), nullable=False)
+
+    # Assuming from your screenshot you have a factory_master table.
+    # If not, you can remove the ForeignKey for now and just leave it as Integer.
+    factory_id = Column(Integer, ForeignKey("factory_master.id"), nullable=False)
+
+    quantity_produced = Column(Integer, nullable=False)
+    batch_number = Column(String(50), nullable=False)
+    production_date = Column(Date, nullable=False)
