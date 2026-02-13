@@ -12,7 +12,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    role_id: int
+    assigned_zone_id: Optional[int] = None
+    assigned_region_id: Optional[int] = None
+    assigned_area_id: Optional[int] = None
+    assigned_territory_id: Optional[int] = None
 
 class UserRead(UserBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+    role_id: int
+    assigned_territory_id: Optional[int]

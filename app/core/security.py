@@ -68,3 +68,15 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def check_permissions(required_permission: str):
+    def permission_checker(current_user: User = Depends(get_current_user)):
+        user_permissions = [p.name for p in current_user.role.permissions]
+        if required_permission not in user_permissions and current_user.role.name != "Admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have the required permissions for this action"
+            )
+        return current_user
+    return permission_checker
