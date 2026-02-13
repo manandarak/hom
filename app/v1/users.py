@@ -7,9 +7,6 @@ from src.app.core.security import check_permissions
 
 router = APIRouter()
 
-@router.post("/", response_model=UserRead)
-def add_new_user(user_in: UserCreate, db: Session = Depends(get_db)):
-    return create_user(db, user_in)
 
 @router.post("/", response_model=UserRead)
 def add_new_user(

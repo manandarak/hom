@@ -1,16 +1,18 @@
 from pydantic import BaseModel, ConfigDict
 
-# --- BASE (Shared fields) ---
+
 class GeoBase(BaseModel):
     name: str
 
-# --- CREATE SCHEMAS (Input - No IDs) ---
-# Use these in your POST requests
+# --- CREATE SCHEMAS ---
 class ZoneCreate(GeoBase):
-    pass  # Just needs 'name'
+    pass
+
+class StateCreate(GeoBase):
+    zone_id: int
 
 class RegionCreate(GeoBase):
-    zone_id: int
+    state_id: int  # Fixed: Was zone_id before
 
 class AreaCreate(GeoBase):
     region_id: int
@@ -18,15 +20,20 @@ class AreaCreate(GeoBase):
 class TerritoryCreate(GeoBase):
     area_id: int
 
-# --- READ SCHEMAS (Output - Includes IDs) ---
-# Use these in your response_model
+
+# --- READ SCHEMAS ---
 class ZoneRead(GeoBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
-class RegionRead(GeoBase):
+class StateRead(GeoBase):
     id: int
     zone_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class RegionRead(GeoBase):
+    id: int
+    state_id: int  # Fixed: Was zone_id before
     model_config = ConfigDict(from_attributes=True)
 
 class AreaRead(GeoBase):

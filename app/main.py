@@ -13,6 +13,7 @@ from src.app.v1 import (
     production
 )
 from src.app.core.config import settings
+from src.app.v1 import partner
 
 # Initialize the App
 app = FastAPI(
@@ -92,6 +93,8 @@ app.include_router(secondary_sales.router, prefix="/api/v1/secondary-sales",
                    tags=["08. Secondary Sales (DB -> Retailer)"])
 app.include_router(tertiary_sales.router, prefix="/api/v1/tertiary-sales",
                    tags=["09. Tertiary Sales (Retailer -> Barber)"])
+
+app.include_router(partner.router, prefix="/api/v1/partners", tags=["10. Partners"])
 
 
 # --- HEALTH CHECK ---
