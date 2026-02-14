@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from decimal import Decimal
+from pydantic import ConfigDict
 
 class ProductBase(BaseModel):
     sku_code: str
@@ -18,6 +19,4 @@ class ProductCreate(ProductBase):
 
 class ProductResponse(ProductBase):
     id: int
-
-    class Config:
-        from_attributes = True  # Use orm_mode = True if using Pydantic v1
+    model_config = ConfigDict(from_attributes=True)

@@ -1,18 +1,28 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
 from src.app.schemas.orders import SecondaryOrderCreate
+from src.app.services.stock_service import StockService
 from src.app.crud.secondary_sales import create_secondary_order
 
 router = APIRouter()
 
-@router.post("/")
-def place_secondary_order(order_in: SecondaryOrderCreate, db: Session = Depends(get_db)):
-    # Converting schema list to dict list for the CRUD function
-    items = [{"product_id": i.product_id, "quantity": i.quantity} for i in order_in.items]
-    return create_secondary_order(
-        db,
-        retailer_id=order_in.retailer_id,
-        distributor_id=order_in.distributor_id,
-        items_in=items
-    )
+@router.post("/", status_code=201)
+def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(get_db)):
+    try:
+        for item in sale_in.items:
+            # Deduct stock from the Distributor
+            StockService.update_stock(
+                db=db,
+                entity_type="Distributor",
+                entity_id=sale_in.distributor_id,
+                product_id=item.product_id,
+                qty_change=-item.quantity, # Deducting stock
+                ref_doc=f"INV-SEC-{sale_in.retailer_id}",
+                trans_type="SECONDARY_SALE"
+            )
+        db.commit()
+        return {"message": "Secondary sale recorded and distributor stock updated."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))

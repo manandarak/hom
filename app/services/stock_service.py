@@ -32,32 +32,30 @@ class StockService:
     def _get_stock_record(db: Session, entity_type: str, entity_id: int, product_id: int):
         """Helper to find the correct inventory record based on entity type"""
         model = None
+        record = None
 
-        # dynamic mapping
         if entity_type == "Distributor":
             model = DistributorInventory
-            # Check the actual column name in your model.
-            # In your models/inventory.py, it is 'distributor_id'
             record = db.query(model).filter_by(distributor_id=entity_id, product_id=product_id).first()
-
         elif entity_type == "Factory":
             model = FactoryInventory
             record = db.query(model).filter_by(factory_id=entity_id, product_id=product_id).first()
-
         elif entity_type == "SuperStockist":
             model = SSInventory
             record = db.query(model).filter_by(ss_id=entity_id, product_id=product_id).first()
-
         else:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        # If no record exists, you might want to create one (Initialize Stock)
+
         if not record:
-            # Simple initialization logic
             if entity_type == "Distributor":
                 record = DistributorInventory(distributor_id=entity_id, product_id=product_id, current_stock_qty=0)
-            # ... handle others ...
+            elif entity_type == "Factory":
+                record = FactoryInventory(factory_id=entity_id, product_id=product_id, current_stock_qty=0)
+            elif entity_type == "SuperStockist":
+                record = SSInventory(ss_id=entity_id, product_id=product_id, current_stock_qty=0)
+
             db.add(record)
-            db.flush()  # Get ID
+            db.flush()
 
         return record
