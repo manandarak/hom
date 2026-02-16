@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-
+from typing import Optional
 
 class GeoBase(BaseModel):
     name: str
@@ -45,3 +45,10 @@ class TerritoryRead(GeoBase):
     id: int
     area_id: int
     model_config = ConfigDict(from_attributes=True)
+
+class ZoneUpdate(BaseModel):
+    name: Optional[str] = None
+
+class StateUpdate(BaseModel):
+    name: Optional[str] = None
+    zone_id: Optional[int] = None

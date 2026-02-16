@@ -3,6 +3,17 @@ from typing import Optional
 from decimal import Decimal
 from pydantic import ConfigDict
 
+class ProductUpdate(BaseModel):
+    sku_code: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    mrp: Optional[Decimal] = None
+    base_price: Optional[Decimal] = None
+    gst_percent: Optional[int] = None
+    units_per_case: Optional[int] = None
+    is_active: Optional[bool] = None
+
 class ProductBase(BaseModel):
     sku_code: str
     name: str

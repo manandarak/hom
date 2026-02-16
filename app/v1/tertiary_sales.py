@@ -13,6 +13,10 @@ from src.app.core.security import get_current_user
 from src.app.services.permission_service import PermissionService
 from src.app.crud.tertiary_sales import get_scoped_pending_orders
 from src.app.models.user import User
+from src.app.schemas.partner import EndConsumerCreate, EndConsumerRead, EndConsumerUpdate
+from src.app.crud.tertiary_sales import (
+    create_end_consumer, get_end_consumers, update_end_consumer, delete_end_consumer
+)
 
 router = APIRouter()
 
@@ -86,3 +90,26 @@ def get_my_pending_requests(
 
     # 2. Pass the filter to the database query
     return get_scoped_pending_orders(db, scope_filter)
+
+
+@router.post("/consumers", response_model=EndConsumerRead, status_code=201)
+def register_end_consumer(consumer_in: EndConsumerCreate, db: Session = Depends(get_db)):
+    return create_end_consumer(db, consumer_in)
+
+@router.get("/consumers", response_model=list[EndConsumerRead])
+def list_end_consumers(db: Session = Depends(get_db)):
+    return get_end_consumers(db)
+
+@router.patch("/consumers/{consumer_id}", response_model=EndConsumerRead)
+def modify_end_consumer(consumer_id: int, consumer_in: EndConsumerUpdate, db: Session = Depends(get_db)):
+    updated = update_end_consumer(db, consumer_id, consumer_in)
+    if not updated:
+        raise HTTPException(status_code=404, detail="End Consumer not found")
+    return updated
+
+@router.delete("/consumers/{consumer_id}", status_code=204)
+def remove_end_consumer(consumer_id: int, db: Session = Depends(get_db)):
+    success = delete_end_consumer(db, consumer_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="End Consumer not found")
+    return None

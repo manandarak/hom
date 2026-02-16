@@ -56,6 +56,17 @@ class FactoryMaster(Base):
     # but this is enough to satisfy the Foreign Key!
 
 
+# Add to src/app/models/inventory.py
+
+class InTransitInventory(Base):
+    """Holds stock that has left the factory but hasn't reached the destination"""
+    __tablename__ = "in_transit_inventory"
+    id = Column(Integer, primary_key=True)
+    order_id = Column(BigInteger, index=True) # Ties directly to the Order ID
+    product_id = Column(Integer, ForeignKey("product_master.id"))
+    current_stock_qty = Column(Integer, default=0)
+
+
 class DailyProductionLog(Base):
     __tablename__ = "daily_production_log"
     __table_args__ = {'extend_existing': True}

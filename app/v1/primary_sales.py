@@ -1,39 +1,29 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
+
+from src.app.models.sales_primary import PrimaryOrder
 from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead
 from src.app.crud.primary_sales import create_primary_order
 from src.app.services.order_service import OrderService
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from src.app.core.database import get_db
-from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead
-from src.app.services.stock_service import StockService
 
 router = APIRouter()
 
 @router.get("/", response_model=list[PrimaryOrderRead])
 def get_all_primary_orders(db: Session = Depends(get_db)):
-    from src.app.models.sales_primary import PrimaryOrder
+    """Fetch all primary orders"""
     return db.query(PrimaryOrder).order_by(PrimaryOrder.id.desc()).all()
+
 
 @router.post("/", response_model=PrimaryOrderRead, status_code=status.HTTP_201_CREATED)
 def place_primary_order(order_in: PrimaryOrderCreate, db: Session = Depends(get_db)):
+    """
+    Creates a Primary Order (Factory to Super Stockist).
+    Status defaults to 'Pending'. No stock is deducted yet.
+    """
     try:
         # 1. Create the Order Record in the DB
         db_order = create_primary_order(db, order_in)
-
-
-        for item in order_in.items:
-            StockService.update_stock(
-                db=db,
-                entity_type="Factory",
-                entity_id=order_in.from_entity_id,
-                product_id=item.product_id,
-                qty_change=-item.quantity,
-                ref_doc=order_in.order_number,
-                trans_type="PRIMARY_SALE_OUT"
-            )
 
         db.commit()
         db.refresh(db_order)
@@ -43,36 +33,21 @@ def place_primary_order(order_in: PrimaryOrderCreate, db: Session = Depends(get_
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.post("/{order_id}/dispatch")
+def dispatch_order(order_id: int, db: Session = Depends(get_db)):
+    """
+    Deducts stock from Factory, generates Primary Invoice,
+    and moves stock to In-Transit Inventory.
+    Updates status to 'Dispatched'.
+    """
+    return OrderService.dispatch_primary_order(db, order_id)
+
+
 @router.post("/{order_id}/receive")
 def receive_order(order_id: int, db: Session = Depends(get_db)):
+    """
+    Moves stock from In-Transit Inventory to the Super Stockist.
+    Updates status to 'Received'.
+    """
     return OrderService.receive_primary_order(db, order_id)
-
-@router.post("/secondary-sale", status_code=201)
-def secondary_sale_dispatch(order_in: PrimaryOrderCreate, db: Session = Depends(get_db)):
-    try:
-        for item in order_in.items:
-            StockService.update_stock(
-                db=db,
-                entity_type="SuperStockist",
-                entity_id=order_in.from_entity_id,
-                product_id=item.product_id,
-                qty_change=-item.quantity,
-                ref_doc=order_in.order_number,
-                trans_type="SECONDARY_SALE_OUT"
-            )
-
-            StockService.update_stock(
-                db=db,
-                entity_type="Distributor",
-                entity_id=order_in.to_entity_id,
-                product_id=item.product_id,
-                qty_change=item.quantity,
-                ref_doc=order_in.order_number,
-                trans_type="SECONDARY_SALE_IN"
-            )
-
-        db.commit()
-        return {"message": "Stock moved from Super Stockist to Distributor successfully."}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))

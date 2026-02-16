@@ -23,3 +23,11 @@ class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
     role_id: int
     assigned_territory_id: Optional[int]
+
+class UserUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    role_id: Optional[int] = None
+    assigned_zone_id: Optional[int] = None
+    assigned_region_id: Optional[int] = None
+    assigned_area_id: Optional[int] = None
+    assigned_territory_id: Optional[int] = None

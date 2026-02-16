@@ -5,7 +5,7 @@ from src.app.schemas.inventory import ProductionLogCreate
 from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory
 from src.app.services.stock_service import StockService
 from src.app.models.inventory import StockLedger
-from src.app.schemas.inventory import StockLedgerRead
+from src.app.schemas.inventory import StockLedgerRead, StockUpdate
 
 router = APIRouter()
 
@@ -57,3 +57,44 @@ def get_ss_stock(ss_id: int, db: Session = Depends(get_db)):
 def get_stock_ledger(db: Session = Depends(get_db)):
     """Fetch the master audit trail of all inventory movements (Latest 100 records)"""
     return db.query(StockLedger).order_by(StockLedger.created_at.desc()).limit(100).all()
+
+
+@router.post("/{entity_type}/{entity_id}/adjust", status_code=200)
+def adjust_stock(
+        entity_type: str,
+        entity_id: int,
+        update_in: StockUpdate,
+        db: Session = Depends(get_db)
+):
+    """
+    Manual adjustment for shrinkage, damage, returns, or audit corrections.
+    entity_type must be: Factory, SuperStockist, Distributor, or Retailer
+    """
+    # Standardize casing to match the StockService expectations (e.g. "distributor" -> "Distributor")
+    formatted_entity_type = entity_type.capitalize()
+    if formatted_entity_type == "Superstockist":
+        formatted_entity_type = "SuperStockist"
+
+    try:
+        stock_record = StockService.update_stock(
+            db=db,
+            entity_type=formatted_entity_type,
+            entity_id=entity_id,
+            product_id=update_in.product_id,
+            qty_change=update_in.quantity_change,  # Can be positive (found stock) or negative (shrinkage/damage)
+            ref_doc=update_in.reference_document,  # e.g., "AUDIT-FEB-2026"
+            trans_type=update_in.transaction_type  # e.g., "Adjustment", "Damage", "Return"
+        )
+        db.commit()
+        return {
+            "message": "Stock adjusted successfully",
+            "new_balance": stock_record.current_stock_qty,
+            "product_id": update_in.product_id
+        }
+    except ValueError as ve:
+        # Catches unknown entity types from the StockService
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        db.rollback()
+        # If the negative stock validation fails, it will bubble up the HTTPException here
+        raise e

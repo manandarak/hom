@@ -25,6 +25,10 @@ from src.app.crud.geography import (
 )
 
 from src.app.core.security import get_current_user
+from src.app.schemas.geography import TerritoryRead
+from sqlalchemy.exc import IntegrityError
+from src.app.schemas.geography import ZoneUpdate
+from src.app.models.geography import Zone
 
 router = APIRouter()
 
@@ -76,10 +80,50 @@ def create_new_area(area: AreaCreate, db: Session = Depends(get_db)):
 def list_areas_in_region(region_id: int, db: Session = Depends(get_db)):
     return get_areas_by_region(db, region_id)
 
-# --- TERRITORY READ ROUTE ---
-# You already have the POST route, let's add the GET route so you can fetch them!
-from src.app.schemas.geography import TerritoryRead
 
 @router.get("/areas/{area_id}/territories", response_model=list[TerritoryRead])
 def list_territories_in_area(area_id: int, db: Session = Depends(get_db)):
     return get_territories_by_area(db, area_id)
+
+
+@router.patch("/zones/{zone_id}", response_model=ZoneRead)
+def update_zone(
+        zone_id: int,
+        zone_in: ZoneUpdate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    db_zone = db.query(Zone).filter(Zone.id == zone_id).first()
+    if not db_zone:
+        raise HTTPException(status_code=404, detail="Zone not found")
+
+    update_data = zone_in.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_zone, key, value)
+
+    db.commit()
+    db.refresh(db_zone)
+    return db_zone
+
+
+@router.delete("/zones/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_zone(
+        zone_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    db_zone = db.query(Zone).filter(Zone.id == zone_id).first()
+    if not db_zone:
+        raise HTTPException(status_code=404, detail="Zone not found")
+
+    try:
+        db.delete(db_zone)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # This catches the error if States or ZSMs are still linked to this Zone!
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete Zone. It is currently assigned to active States, Super Stockists, or Users."
+        )
+    return None
