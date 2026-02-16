@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from src.app.crud.inventory import get_distributor_stock, create_ledger_entry
 from src.app.models.inventory import DistributorInventory, FactoryInventory, SSInventory
+from src.app.models.inventory import DistributorInventory, FactoryInventory, SSInventory, RetailerInventory
 
 
 class StockService:
@@ -43,9 +44,11 @@ class StockService:
         elif entity_type == "SuperStockist":
             model = SSInventory
             record = db.query(model).filter_by(ss_id=entity_id, product_id=product_id).first()
+        elif entity_type == "Retailer":  # <--- NEW LOGIC HERE
+            model = RetailerInventory
+            record = db.query(model).filter_by(retailer_id=entity_id, product_id=product_id).first()
         else:
             raise ValueError(f"Unknown entity type: {entity_type}")
-
 
         if not record:
             if entity_type == "Distributor":
@@ -54,6 +57,8 @@ class StockService:
                 record = FactoryInventory(factory_id=entity_id, product_id=product_id, current_stock_qty=0)
             elif entity_type == "SuperStockist":
                 record = SSInventory(ss_id=entity_id, product_id=product_id, current_stock_qty=0)
+            elif entity_type == "Retailer":  # <--- NEW INIT LOGIC HERE
+                record = RetailerInventory(retailer_id=entity_id, product_id=product_id, current_stock_qty=0)
 
             db.add(record)
             db.flush()

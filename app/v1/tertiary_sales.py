@@ -9,8 +9,18 @@ from src.app.crud.tertiary_sales import (
     get_tertiary_order_by_id  # You'll need this to find the distributor info
 )
 from src.app.services.stock_service import StockService
+from src.app.core.security import get_current_user
+from src.app.services.permission_service import PermissionService
+from src.app.crud.tertiary_sales import get_scoped_pending_orders
+from src.app.models.user import User
 
 router = APIRouter()
+
+
+@router.get("/")
+def get_all_tertiary_orders(db: Session = Depends(get_db)):
+    from src.app.models.sales_tertiary import TertiaryOrder
+    return db.query(TertiaryOrder).order_by(TertiaryOrder.id.desc()).all()
 
 
 @router.post("/", status_code=201)
@@ -48,10 +58,11 @@ def approve_tertiary_order(order_id: int, db: Session = Depends(get_db)):
         # This is the crucial link in the supply chain!
         StockService.update_stock(
             db=db,
-            entity_type="Distributor",
-            entity_id=order.distributor_id,
+            entity_type="Retailer",
+            # Use the correct Retailer ID field from your TertiaryOrder model
+            entity_id=order.fulfilled_by_retailer_id,  # Or order.retailer_id if that is what your DB uses
             product_id=order.product_id,
-            qty_change=-order.quantity,  # Negative to remove from warehouse
+            qty_change=-order.quantity,  # Negative to remove from shop
             ref_doc=f"TERT-{order.id}",
             trans_type="RETAIL_SALE"
         )
@@ -64,3 +75,14 @@ def approve_tertiary_order(order_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/pending")
+def get_my_pending_requests(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)  # Extracts the user from the JWT Token!
+):
+    scope_filter = PermissionService.get_user_data_scope(current_user)
+
+    # 2. Pass the filter to the database query
+    return get_scoped_pending_orders(db, scope_filter)

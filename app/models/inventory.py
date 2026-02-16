@@ -30,6 +30,13 @@ class SSInventory(Base):
     product_id = Column(Integer, ForeignKey("product_master.id"))
     current_stock_qty = Column(Integer, default=0)
 
+class RetailerInventory(Base):
+    __tablename__ = "retailer_inventory"
+    id = Column(Integer, primary_key=True)
+    retailer_id = Column(Integer, ForeignKey("retailer.id"))
+    product_id = Column(Integer, ForeignKey("product_master.id"))
+    current_stock_qty = Column(Integer, default=0)
+
 class DistributorInventory(Base):
     __tablename__ = "distributor_inventory"
     id = Column(Integer, primary_key=True)

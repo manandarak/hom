@@ -28,8 +28,9 @@ class SecondaryOrderCreate(BaseModel):
     distributor_id: int
     items: List[OrderItemBase]
 
-# --- TERTIARY ORDERS (Retailer to Barber) ---
 class TertiaryOrderCreate(BaseModel):
     end_consumer_id: int
-    request_date: date
+    fulfilled_by_retailer_id: int
+    product_id: int
+    quantity: int
     assigned_so_id: int

@@ -4,12 +4,13 @@ from src.app.core.database import get_db
 from src.app.schemas.inventory import ProductionLogCreate
 from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory
 from src.app.services.stock_service import StockService
+from src.app.models.inventory import StockLedger
+from src.app.schemas.inventory import StockLedgerRead
 
 router = APIRouter()
 
 @router.get("/factory/{factory_id}")
 def get_factory_stock(factory_id: int, db: Session = Depends(get_db)):
-    # Corrected GET API for your dashboard to see current stock levels
     from src.app.models.inventory import FactoryInventory
     stock = db.query(FactoryInventory).filter(FactoryInventory.factory_id == factory_id).all()
     return [{"product_id": s.product_id, "current_stock": s.current_stock_qty} for s in stock]
@@ -17,7 +18,7 @@ def get_factory_stock(factory_id: int, db: Session = Depends(get_db)):
 @router.post("/factory/produce", status_code=201)
 def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(get_db)):
     try:
-        # 1. Log the production event in the transaction log
+
         production_log = DailyProductionLog(
             product_id=log_in.product_id,
             factory_id=log_in.factory_id,
@@ -27,8 +28,7 @@ def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(ge
         )
         db.add(production_log)
 
-        # 2. Use StockService to handle the complex inventory update and ledger entry
-        # This ensures current_stock_qty and stock_ledger stay perfectly synced
+
         StockService.update_stock(
             db=db,
             entity_type="Factory",
@@ -51,3 +51,9 @@ def get_ss_stock(ss_id: int, db: Session = Depends(get_db)):
     """Fetches all stock sitting with a specific Super Stockist"""
     stock = db.query(SSInventory).filter(SSInventory.ss_id == ss_id).all()
     return [{"product_id": s.product_id, "current_stock": s.current_stock_qty} for s in stock]
+
+
+@router.get("/ledger", response_model=list[StockLedgerRead])
+def get_stock_ledger(db: Session = Depends(get_db)):
+    """Fetch the master audit trail of all inventory movements (Latest 100 records)"""
+    return db.query(StockLedger).order_by(StockLedger.created_at.desc()).limit(100).all()
