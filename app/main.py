@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.app.core.config import settings
 from src.app.v1 import partner
 from src.app.v1 import finance
-# Initialize the App
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
@@ -24,7 +24,7 @@ app = FastAPI(
 )
 
 
-# --- SECURITY CONFIGURATION (The Magic Part) ---
+
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -36,21 +36,19 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    # Define the Security Scheme (OAuth2 with Password Flow)
+
     openapi_schema["components"]["securitySchemes"] = {
         "OAuth2PasswordBearer": {
             "type": "oauth2",
             "flows": {
                 "password": {
-                    "tokenUrl": "/api/v1/auth/login",  # This must match your login endpoint
+                    "tokenUrl": "/api/v1/auth/login",
                     "scopes": {}
                 }
             }
         }
     }
 
-    # Apply security globally to all endpoints
-    # (You can remove this line if you want to apply it manually per router)
     openapi_schema["security"] = [{"OAuth2PasswordBearer": []}]
 
     app.openapi_schema = openapi_schema
@@ -59,7 +57,7 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# --- MIDDLEWARE ---
+
 origins = [
     "http://localhost",
     "http://localhost:8000",
@@ -68,7 +66,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific domains
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,15 +76,15 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["01. Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["02. User Management"])
 
-# Masters (Geo & Products)
+
 app.include_router(geography.router, prefix="/api/v1/geo", tags=["03. Geography"])
 app.include_router(product.router, prefix="/api/v1/products",  tags=["04. Products"])
 
-# Supply Chain Operations
+
 app.include_router(production.router, prefix="/api/v1/production", tags=["05. Factory Production"])
 app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["06. Stock Management"])
 
-# Sales Flows
+
 app.include_router(primary_sales.router, prefix="/api/v1/primary-orders", tags=["07. Primary Sales (Factory -> SS)"])
 app.include_router(secondary_sales.router, prefix="/api/v1/secondary-sales",
                    tags=["08. Secondary Sales (DB -> Retailer)"])
@@ -97,7 +95,7 @@ app.include_router(partner.router, prefix="/api/v1/partners", tags=["10. Partner
 
 app.include_router(finance.router, prefix="/api/v1/finance", tags=["11. Finance & A/R"])
 
-# --- HEALTH CHECK ---
+
 @app.get("/", tags=["Health Check"])
 def root():
     return {

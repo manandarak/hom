@@ -87,7 +87,7 @@ def approve_tertiary_order(order_id: int, db: Session = Depends(get_db)):
 @router.get("/pending")
 def get_my_pending_requests(
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)  # Extracts the user from the JWT Token!
+        current_user: User = Depends(get_current_user)
 ):
     scope_filter = PermissionService.get_user_data_scope(current_user)
 
