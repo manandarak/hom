@@ -11,6 +11,7 @@ class StockLedger(Base):
     entity_type = Column(String)
     entity_id = Column(Integer)
     product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
     transaction_type = Column(String)
     reference_document = Column(String)
     quantity_change = Column(Integer)
@@ -21,6 +22,7 @@ class FactoryInventory(Base):
     id = Column(Integer, primary_key=True)
     factory_id = Column(Integer, ForeignKey("factory_master.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
 class SSInventory(Base):
@@ -28,6 +30,7 @@ class SSInventory(Base):
     id = Column(Integer, primary_key=True)
     ss_id = Column(Integer, ForeignKey("super_stockist.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
 class RetailerInventory(Base):
@@ -35,6 +38,7 @@ class RetailerInventory(Base):
     id = Column(Integer, primary_key=True)
     retailer_id = Column(Integer, ForeignKey("retailer.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
 class DistributorInventory(Base):
@@ -42,6 +46,7 @@ class DistributorInventory(Base):
     id = Column(Integer, primary_key=True)
     distributor_id = Column(Integer, ForeignKey("distributor.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
 
@@ -52,6 +57,7 @@ class FactoryMaster(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     location = Column(String(100))
+    batch_number = Column(String(50), nullable=False)
     # Add other columns if your MySQL table has them,
     # but this is enough to satisfy the Foreign Key!
 
@@ -64,6 +70,7 @@ class InTransitInventory(Base):
     id = Column(Integer, primary_key=True)
     order_id = Column(BigInteger, index=True) # Ties directly to the Order ID
     product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
 
@@ -77,7 +84,7 @@ class DailyProductionLog(Base):
     # Assuming from your screenshot you have a factory_master table.
     # If not, you can remove the ForeignKey for now and just leave it as Integer.
     factory_id = Column(Integer, ForeignKey("factory_master.id"), nullable=False)
-
+    batch_number = Column(String(50), nullable=False)
     quantity_produced = Column(Integer, nullable=False)
     batch_number = Column(String(50), nullable=False)
     production_date = Column(Date, nullable=False)

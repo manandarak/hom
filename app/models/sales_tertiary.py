@@ -18,13 +18,14 @@ class TertiaryOrder(Base):
     end_consumer_id = Column(Integer, ForeignKey("end_consumer.id"))
     assigned_so_id = Column(BigInteger, ForeignKey("users.id"))
     fulfilled_by_retailer_id = Column(Integer, ForeignKey("retailer.id"))
-
+    batch_number = Column(String(50), nullable=False)
     # --- ADD THESE TWO LINES ---
     product_id = Column(Integer, ForeignKey("product_master.id"))
     quantity = Column(Integer)
     # ---------------------------
 
     status = Column(String(50))
+    # order = relationship("SecondaryOrder", back_populates="items")
 
 
 

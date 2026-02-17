@@ -7,6 +7,7 @@ from decimal import Decimal
 class OrderItemBase(BaseModel):
     product_id: int
     quantity: int # cases for Primary, units for Secondary
+    batch_number: str
 
 # --- PRIMARY ORDERS (Factory/SS) ---
 class PrimaryOrderCreate(BaseModel):
@@ -34,3 +35,10 @@ class TertiaryOrderCreate(BaseModel):
     product_id: int
     quantity: int
     assigned_so_id: int
+
+class DispatchPayload(BaseModel):
+    transporter_name: str
+    vehicle_number: str
+    lr_number: str
+    driver_phone: Optional[str] = None
+    estimated_arrival_date: date

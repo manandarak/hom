@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-
+from src.app.models.sales_primary import PrimaryOrder, PrimaryOrderItems
+from src.app.schemas.orders import PrimaryOrderCreate
 from src.app.models.sales_primary import PrimaryOrder
 from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead
 from src.app.crud.primary_sales import create_primary_order
 from src.app.services.order_service import OrderService
+from src.app.schemas.orders import DispatchPayload
 
 router = APIRouter()
 
@@ -35,13 +37,14 @@ def place_primary_order(order_in: PrimaryOrderCreate, db: Session = Depends(get_
 
 
 @router.post("/{order_id}/dispatch")
-def dispatch_order(order_id: int, db: Session = Depends(get_db)):
-    """
-    Deducts stock from Factory, generates Primary Invoice,
-    and moves stock to In-Transit Inventory.
-    Updates status to 'Dispatched'.
-    """
-    return OrderService.dispatch_primary_order(db, order_id)
+def dispatch_order(order_id: int, dispatch_data: DispatchPayload, db: Session = Depends(get_db)):
+    """Dispatches a primary order with partial fulfillment and logistics tracking."""
+    try:
+        result = OrderService.dispatch_primary_order(db, order_id, dispatch_data)
+        return result
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{order_id}/receive")
@@ -51,3 +54,57 @@ def receive_order(order_id: int, db: Session = Depends(get_db)):
     Updates status to 'Received'.
     """
     return OrderService.receive_primary_order(db, order_id)
+
+
+@router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
+def cancel_primary_order(order_id: int, db: Session = Depends(get_db)):
+    """Cancels a primary order if it has not been dispatched yet."""
+    order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status != "Pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel order. Current status is '{order.status}'. Only 'Pending' orders can be cancelled."
+        )
+
+    order.status = "Cancelled"
+    db.commit()
+    return {"message": f"Order {order.order_number} has been cancelled successfully."}
+
+
+@router.put("/{order_id}", status_code=status.HTTP_200_OK)
+def update_primary_order(order_id: int, update_in: PrimaryOrderCreate, db: Session = Depends(get_db)):
+    """Updates the items in a primary order before it is dispatched."""
+    order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status != "Pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update order in '{order.status}' status. Create a new order instead."
+        )
+
+    # 1. Delete the old items completely
+    db.query(PrimaryOrderItems).filter(PrimaryOrderItems.primary_order_id == order_id).delete()
+    db.flush()
+
+    # 2. Insert the fresh, corrected items
+    for item in update_in.items:
+        new_item = PrimaryOrderItems(
+            primary_order_id=order.id,
+            product_id=item.product_id,
+            batch_number=item.batch_number,
+            quantity_cases=item.quantity,  # Assuming your schema uses 'quantity'
+            dispatched_cases=0,
+            backordered_cases=0,
+            free_cases=0
+        )
+        db.add(new_item)
+
+    db.commit()
+    return {"message": f"Order {order.order_number} updated successfully."}

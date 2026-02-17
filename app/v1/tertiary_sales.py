@@ -17,6 +17,9 @@ from src.app.schemas.partner import EndConsumerCreate, EndConsumerRead, EndConsu
 from src.app.crud.tertiary_sales import (
     create_end_consumer, get_end_consumers, update_end_consumer, delete_end_consumer
 )
+from fastapi import APIRouter, Depends, HTTPException, status
+from src.app.models.sales_tertiary import TertiaryOrder, TertiaryOrder
+from src.app.schemas.orders import TertiaryOrderCreate
 
 router = APIRouter()
 
@@ -113,3 +116,59 @@ def remove_end_consumer(consumer_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="End Consumer not found")
     return None
+
+
+@router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
+def cancel_tertiary_order(order_id: int, db: Session = Depends(get_db)):
+    """Cancels a tertiary order if it is still pending."""
+    order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Tertiary Order not found")
+
+    if order.status != "Pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel order. Current status is '{order.status}'."
+        )
+
+    order.status = "Cancelled"
+    db.commit()
+    return {"message": f"Tertiary Order {order.id} has been cancelled successfully."}
+
+
+@router.put("/{order_id}", status_code=status.HTTP_200_OK)
+def update_tertiary_order(order_id: int, update_in: TertiaryOrderCreate, db: Session = Depends(get_db)):
+    """Updates the items in a tertiary order before fulfillment."""
+    order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Tertiary Order not found")
+
+    if order.status != "Pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update order in '{order.status}' status."
+        )
+
+    # Update Header Information
+    order.end_consumer_id = update_in.end_consumer_id
+    order.fulfilled_by_retailer_id = update_in.fulfilled_by_retailer_id
+    order.assigned_so_id = update_in.assigned_so_id
+
+    # 1. Delete the old items completely
+    db.query(TertiaryOrderItems).filter(TertiaryOrderItems.tertiary_order_id == order_id).delete()
+    db.flush()
+
+    # 2. Insert the fresh, corrected items
+    for item in update_in.items:
+        new_item = TertiaryOrderItems(
+            tertiary_order_id=order.id,
+            product_id=item.product_id,
+            batch_number=item.batch_number,
+            quantity=item.quantity  # Note: mapped directly to quantity in tertiary
+        )
+        db.add(new_item)
+
+    db.commit()
+    return {"message": f"Tertiary Order {order.id} updated successfully."}

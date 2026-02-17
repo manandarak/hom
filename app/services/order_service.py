@@ -4,90 +4,139 @@ from datetime import date
 from src.app.models.sales_primary import PrimaryOrder, PrimaryInvoice
 from src.app.models.product import ProductMaster
 from src.app.services.stock_service import StockService
+from src.app.services.pricing_service import PricingService
+from src.app.services.finance_service import FinanceService
+from src.app.models.logistics import Shipment
+from src.app.schemas.orders import DispatchPayload
+import datetime
 
 
 class OrderService:
     @staticmethod
-    def dispatch_primary_order(db: Session, order_id: int):
-        # 1. Fetch the order
+    def dispatch_primary_order(db: Session, order_id: int, dispatch_data: DispatchPayload):
         order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
+        if not order or order.status not in ["Pending", "Partially Dispatched"]:
+            raise HTTPException(status_code=400, detail="Order cannot be dispatched")
 
-        if order.status != "Pending":
-            raise HTTPException(status_code=400, detail=f"Cannot dispatch order in {order.status} status")
+        total_invoice_amount = 0.00
+        from_entity_type, to_entity_type = OrderService.get_routing_entities(order.type)
 
-        total_invoice_amount = 0
+        is_completely_fulfilled = True
+        actual_items_dispatched = 0
 
-        # 2. Process Items: Deduct from Factory, Add to In-Transit, Calculate Totals
         for item in order.items:
-            # Fetch Product to calculate invoice
-            product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
-            if not product:
-                raise HTTPException(status_code=400, detail=f"Product {item.product_id} not found")
+            # Skip items that are already fully dispatched from a previous run
+            if item.backordered_cases == 0 and item.dispatched_cases > 0:
+                continue
 
-            # Invoice Math: quantity_cases * units_per_case * base_price * (1 + gst_percent/100)
-            amount = (item.quantity_cases * product.units_per_case) * float(product.base_price) * (
-                        1 + (product.gst_percent / 100))
+            qty_to_fulfill = item.backordered_cases if item.backordered_cases > 0 else item.quantity_cases
+
+            # 1. Check Available Stock
+            available_stock = StockService.check_available_stock(
+                db, from_entity_type, order.from_entity_id, item.product_id, item.batch_number
+            )
+
+            # 2. Calculate Partial Dispatch
+            dispatch_qty = min(qty_to_fulfill, available_stock)
+            backorder_qty = qty_to_fulfill - dispatch_qty
+
+            if backorder_qty > 0:
+                is_completely_fulfilled = False  # We couldn't fulfill the whole order
+
+            if dispatch_qty == 0:
+                # Out of stock entirely for this batch. Mark as backordered and skip pricing/deduction.
+                item.backordered_cases = qty_to_fulfill
+                continue
+
+            actual_items_dispatched += 1
+
+            # 3. Calculate Pricing & Trade Schemes
+            product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
+            final_price, free_qty = PricingService.calculate_item_pricing(
+                db, product.id, float(product.base_price), dispatch_qty
+            )
+
+            # Safety check: Do we have physical stock to give the free items?
+            if (dispatch_qty + free_qty) > available_stock:
+                free_qty = available_stock - dispatch_qty  # Cap free items to what's physically left
+
+            # 4. Invoice Math (Only charge for dispatch_qty, not free_qty)
+            amount = dispatch_qty * final_price * (1 + (product.gst_percent / 100))
             total_invoice_amount += amount
 
-            # Deduct from Factory
+            # Update DB Item Status
+            item.dispatched_cases += dispatch_qty
+            item.backordered_cases = backorder_qty
+            item.free_cases += free_qty
+            item.final_price_per_case = final_price
+
+            # 5. Move Physical Stock (Deduct Paid + Free stock)
+            total_physical_deduction = dispatch_qty + free_qty
+
             StockService.update_stock(
-                db=db,
-                entity_type="Factory",
-                entity_id=order.from_entity_id,
-                product_id=item.product_id,
-                qty_change=-item.quantity_cases,
-                ref_doc=order.order_number,
-                trans_type="PRIMARY_DISPATCH_OUT"
+                db=db, entity_type=from_entity_type, entity_id=order.from_entity_id,
+                product_id=item.product_id, batch_number=item.batch_number,
+                qty_change=-total_physical_deduction, ref_doc=order.order_number,
+                trans_type=f"DISPATCH_OUT_{from_entity_type.upper()}"
+            )
+            StockService.update_stock(
+                db=db, entity_type="InTransit", entity_id=order.id,
+                product_id=item.product_id, batch_number=item.batch_number,
+                qty_change=total_physical_deduction, ref_doc=order.order_number,
+                trans_type="DISPATCH_IN_TRANSIT"
             )
 
-            # Add to In-Transit
-            StockService.update_stock(
-                db=db,
-                entity_type="InTransit",
-                entity_id=order.id,  # Entity ID is the Order ID here
-                product_id=item.product_id,
-                qty_change=item.quantity_cases,
-                ref_doc=order.order_number,
-                trans_type="PRIMARY_DISPATCH_IN"
-            )
+        if actual_items_dispatched == 0:
+            raise HTTPException(status_code=400, detail="Insufficient stock for all items. Order is fully backordered.")
 
-        # 3. Generate the Orphaned Invoice!
+        # 6. Generate Financials
+        invoice_num = f"INV-{order.order_number}-{datetime.now().strftime('%M%S')}"
         invoice = PrimaryInvoice(
-            primary_order_id=order.id,
-            invoice_number=f"INV-{order.order_number}",
-            final_amount=total_invoice_amount,
-            invoice_date=date.today()
+            primary_order_id=order.id, invoice_number=invoice_num,
+            final_amount=total_invoice_amount, invoice_date=date.today()
         )
         db.add(invoice)
 
-        # 4. Update status to 'Dispatched'
-        order.status = "Dispatched"
+        FinanceService.record_transaction(
+            db=db, party_type=to_entity_type, party_id=order.to_entity_id,
+            trans_type="INVOICE", amount=total_invoice_amount, ref_doc=invoice_num
+        )
+
+        # 7. Create Shipment / Logistics Tracking
+        shipment = Shipment(
+            primary_order_id=order.id,
+            transporter_name=dispatch_data.transporter_name,
+            vehicle_number=dispatch_data.vehicle_number,
+            lr_number=dispatch_data.lr_number,
+            driver_phone=dispatch_data.driver_phone,
+            estimated_arrival_date=dispatch_data.estimated_arrival_date
+        )
+        db.add(shipment)
+
+        # 8. Update Header Status
+        order.status = "Dispatched" if is_completely_fulfilled else "Partially Dispatched"
         db.commit()
 
         return {
-            "message": "Order dispatched successfully",
-            "invoice_number": invoice.invoice_number,
-            "invoice_amount": total_invoice_amount
+            "message": f"Order {order.status}",
+            "invoice_number": invoice_num,
+            "amount_billed": total_invoice_amount,
+            "tracking_lr": shipment.lr_number
         }
 
     @staticmethod
     def receive_primary_order(db: Session, order_id: int):
-        # 1. Fetch the order
         order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
-
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-
         if order.status == "Received":
             return {"message": "Order already processed"}
-
         if order.status != "Dispatched":
-            raise HTTPException(status_code=400,
-                                detail=f"Cannot receive order. Current status is {order.status}. Must be Dispatched.")
+            raise HTTPException(status_code=400, detail=f"Cannot receive order. Current status is {order.status}.")
 
-        # 2. Move stock from 'InTransit' to 'SuperStockist'
+        # --- NEW: Get dynamic routing ---
+        from_entity_type, to_entity_type = OrderService.get_routing_entities(order.type)
+
         for item in order.items:
             # Deduct from In-Transit
             StockService.update_stock(
@@ -97,21 +146,33 @@ class OrderService:
                 product_id=item.product_id,
                 qty_change=-item.quantity_cases,
                 ref_doc=order.order_number,
-                trans_type="PRIMARY_RECEIPT_OUT"
+                trans_type="RECEIPT_OUT_TRANSIT"
             )
 
-            # Add to Super Stockist
+            # --- NEW: Add dynamically to the correct destination ---
             StockService.update_stock(
                 db=db,
-                entity_type="SuperStockist",
+                entity_type=to_entity_type,  # No longer hardcoded to "SuperStockist"!
                 entity_id=order.to_entity_id,
                 product_id=item.product_id,
                 qty_change=item.quantity_cases,
                 ref_doc=order.order_number,
-                trans_type="PRIMARY_RECEIPT_IN"
+                trans_type=f"RECEIPT_IN_{to_entity_type.upper()}"
             )
 
-        # 3. Update status to 'Received'
         order.status = "Received"
         db.commit()
-        return {"message": "Order received successfully and stock delivered to Super Stockist."}
+        return {"message": f"Order received successfully and stock delivered to {to_entity_type}."}
+
+    @staticmethod
+    def get_routing_entities(order_type: str):
+        """Returns (from_entity_type, to_entity_type) based on order type"""
+        order_type = order_type.upper()
+        if order_type == "FACTORY_TO_SS":
+            return "Factory", "SuperStockist"
+        elif order_type == "FACTORY_TO_DB":
+            return "Factory", "Distributor"
+        elif order_type == "SS_TO_DB":
+            return "SuperStockist", "Distributor"
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid order type: {order_type}")

@@ -8,7 +8,7 @@ class PrimaryOrder(Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
     order_number = Column(String(100), unique=True)
-    type = Column(String(50))  
+    type = Column(String(50))
     from_entity_id = Column(Integer)
     to_entity_id = Column(Integer)
     status = Column(String(50), default="Pending")
@@ -16,16 +16,24 @@ class PrimaryOrder(Base):
     # Virtual Elements (ORM Relationships)
     items = relationship("PrimaryOrderItems", back_populates="order")
     invoice = relationship("PrimaryInvoice", back_populates="order", uselist=False)
+    shipment = relationship("Shipment", back_populates="order", uselist=False)
 
 
 class PrimaryOrderItems(Base):
     __tablename__ = "primary_order_items"
-
     id = Column(BigInteger, primary_key=True, index=True)
     primary_order_id = Column(BigInteger, ForeignKey("primary_order.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
-    quantity_cases = Column(Integer)
+    batch_number = Column(String(50), nullable=False)
 
+
+    quantity_cases = Column(Integer, nullable=False)
+    dispatched_cases = Column(Integer, default=0)
+    backordered_cases = Column(Integer, default=0)
+    free_cases = Column(Integer, default=0)
+
+
+    final_price_per_case = Column(DECIMAL(10, 2))  # Price after scheme discount
     order = relationship("PrimaryOrder", back_populates="items")
 
 

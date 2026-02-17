@@ -77,3 +77,9 @@ class StockService:
             db.flush()
 
         return record
+
+    @staticmethod
+    def check_available_stock(db: Session, entity_type: str, entity_id: int, product_id: int, batch_number: str) -> int:
+        """Helper to check stock without modifying it."""
+        record = StockService._get_stock_record(db, entity_type, entity_id, product_id, batch_number)
+        return record.current_stock_qty if record else 0

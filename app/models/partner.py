@@ -12,12 +12,12 @@ class SuperStockist(Base):
 
 
     firm_name = Column(String(150), nullable=True)
-    credit_limit = Column(DECIMAL(12, 2), nullable=True)
 
 
     contact_number = Column(String(20), nullable=True)
     gstin = Column(String(50), nullable=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
+    outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
 
 
     zone = relationship("Zone")
@@ -38,6 +38,7 @@ class Distributor(Base):
     contact_number = Column(String(20))
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
+    outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
 
     user = relationship("User")
     super_stockist = relationship("SuperStockist")
@@ -58,6 +59,7 @@ class Retailer(Base):
     contact_number = Column(String(20))
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
+    outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
 
     user = relationship("User")
     distributor = relationship("Distributor")

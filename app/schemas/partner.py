@@ -5,7 +5,6 @@ from decimal import Decimal
 class SuperStockistBase(BaseModel):
     zone_id: int
     firm_name: str
-    credit_limit: Optional[Decimal] = None
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
@@ -16,7 +15,7 @@ class SuperStockistCreate(SuperStockistBase):
 class SuperStockistRead(SuperStockistBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
-
+    outstanding_balance: Optional[Decimal] = 0.00
 
 # --- DISTRIBUTOR ---
 class DistributorBase(BaseModel):
@@ -34,6 +33,7 @@ class DistributorCreate(DistributorBase):
 class DistributorRead(DistributorBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+    outstanding_balance: Optional[Decimal] = 0.00
 
 
 class RetailerBase(BaseModel):
@@ -51,6 +51,7 @@ class RetailerCreate(RetailerBase):
 class RetailerRead(RetailerBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+    outstanding_balance: Optional[Decimal] = 0.00
 
 
 class EndConsumerBase(BaseModel):
@@ -71,12 +72,12 @@ class EndConsumerUpdate(BaseModel):
 class EndConsumerRead(EndConsumerBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+    outstanding_balance: Optional[Decimal] = 0.00
 
 # Add below SuperStockistRead
 class SuperStockistUpdate(BaseModel):
     zone_id: Optional[int] = None
     firm_name: Optional[str] = None
-    credit_limit: Optional[Decimal] = None
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None

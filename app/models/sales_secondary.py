@@ -24,5 +24,5 @@ class SecondaryOrderItems(Base):
     secondary_order_id = Column(BigInteger, ForeignKey("secondary_order.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
     quantity_units = Column(Integer)
-
+    batch_number = Column(String(50), nullable=False)
     order = relationship("SecondaryOrder", back_populates="items")
