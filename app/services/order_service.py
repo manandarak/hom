@@ -70,7 +70,6 @@ class OrderService:
             item.free_cases += free_qty
             item.final_price_per_case = final_price
 
-            # 5. Move Physical Stock (Deduct Paid + Free stock)
             total_physical_deduction = dispatch_qty + free_qty
 
             StockService.update_stock(

@@ -1,21 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from datetime import datetime
-from src.app.models.sales_secondary import SecondaryOrder, SecondaryOrderItems
-from src.app.schemas.orders import SecondaryOrderCreate
-from src.app.core.database import get_db
-from src.app.schemas.orders import SecondaryOrderCreate
-from src.app.services.stock_service import StockService
-from src.app.crud.secondary_sales import create_secondary_order
-from fastapi import APIRouter, Depends, HTTPException, status
-# Important Imports
 from decimal import Decimal
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+# Core Database
+from src.app.core.database import get_db
+
+# Models
+from src.app.models.sales_secondary import SecondaryOrder, SecondaryOrderItems
+from src.app.models.partner import Retailer, Distributor
+from src.app.models.product import Product  # Fixed from ProductMaster
+
+# Schemas
+from src.app.schemas.orders import SecondaryOrderCreate
+
+# Services
 from src.app.services.stock_service import StockService
 from src.app.services.finance_service import FinanceService
-from src.app.models.partner import Retailer, Distributor
-from src.app.models.product import ProductMaster
-from src.app.services.finance_service import FinanceService
-from src.app.services.tax_service import TaxService  # <-- NEW TAX ENGINE
+from src.app.services.tax_service import TaxService
+
+# CRUD
+from src.app.crud.secondary_sales import create_secondary_order
 
 router = APIRouter()
 
@@ -26,19 +31,20 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
         # ==========================================
         # 1. VALIDATION GAPS & SECURITY CHECKS
         # ==========================================
-        retailer = db.query(Retailer).filter(Retailer.id == sale_in.retailer_id).first()
+        retailer = db.query(Retailer).filter(Retailer.id == sale_in.retailer_id, Retailer.is_active == True).first()
         if not retailer:
-            raise HTTPException(status_code=404, detail="Retailer not found")
+            raise HTTPException(status_code=404, detail="Retailer not found or inactive.")
 
-        distributor = db.query(Distributor).filter(Distributor.id == sale_in.distributor_id).first()
+        distributor = db.query(Distributor).filter(Distributor.id == sale_in.distributor_id, Distributor.is_active == True).first()
         if not distributor:
-            raise HTTPException(status_code=404, detail="Distributor not found")
+            raise HTTPException(status_code=404, detail="Distributor not found or inactive.")
 
-        # SECURITY FIX: Ensure the Retailer actually belongs to this Distributor!
-        if retailer.linked_distributor_id != distributor.id:
+        # SECURITY FIX 1: Ensure the Retailer actually belongs to this Distributor!
+        # Assuming you mapped this via territory_id in your actual models based on earlier brainstorming
+        if distributor.territory_id != retailer.territory_id:
             raise HTTPException(
-                status_code=403,
-                detail=f"Security Violation: Retailer '{retailer.shop_name}' is not authorized to buy from this Distributor."
+                status_code=400,
+                detail=f"Territory mismatch. Distributor is in territory {distributor.territory_id}, but Retailer is in {retailer.territory_id}."
             )
 
         # ==========================================
@@ -50,26 +56,26 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
         if not buyer_state_id:
             raise HTTPException(status_code=400, detail="Could not resolve Retailer's State for Tax Calculation.")
 
-        total_invoice_amount = 0.00
-        total_cgst = 0.00
-        total_sgst = 0.00
-        total_igst = 0.00
+        total_invoice_amount = Decimal("0.00")
+        total_cgst = Decimal("0.00")
+        total_sgst = Decimal("0.00")
+        total_igst = Decimal("0.00")
         invoice_number = f"INV-SEC-{sale_in.retailer_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         # ==========================================
         # 3. PROCESS ITEMS, TAXES & STOCK
         # ==========================================
         for item in sale_in.items:
-            product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
+            product = db.query(Product).filter(Product.id == item.product_id, Product.is_active == True).first()
             if not product:
-                raise HTTPException(status_code=400, detail=f"Product {item.product_id} not found")
+                raise HTTPException(status_code=400, detail=f"Product {item.product_id} not found or inactive.")
 
             # --- TAX CALCULATION FIX ---
-            base_item_amount = item.quantity * Decimal(product.base_price)
+            base_item_amount = Decimal(str(item.quantity)) * Decimal(str(product.base_price))
 
             tax_details = TaxService.calculate_gst(
                 base_amount=base_item_amount,
-                gst_percent=Decimal(product.gst_percent),
+                gst_percent=Decimal(str(product.gst_percent)),
                 seller_state_id=seller_state_id,
                 buyer_state_id=buyer_state_id
             )
@@ -105,12 +111,12 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
         db_order = create_secondary_order(
             db=db, retailer_id=sale_in.retailer_id, distributor_id=sale_in.distributor_id,
             items_in=[item.model_dump() for item in sale_in.items],
-            total_amount = total_invoice_amount
+            total_amount=total_invoice_amount
         )
 
         db.commit()
 
-        # You can now expose the exact tax breakdown to the frontend!
+        # Expose the exact tax breakdown to the frontend!
         return {
             "message": "Secondary sale recorded safely.",
             "invoice_number": invoice_number,
@@ -168,15 +174,13 @@ def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
             )
 
         # 2. Revert Financial Ledger (Issue Credit Note)
-        # Note: Ensure that `order.total_amount` is actually being saved during creation.
-        # If it's missing, you may need to recalculate it or fetch the original ledger entry.
         if order.total_amount and order.total_amount > 0:
             FinanceService.record_transaction(
                 db=db,
                 party_type="Retailer",
                 party_id=order.retailer_id,
                 trans_type="CREDIT_NOTE",  # CREDIT_NOTE reduces the outstanding balance
-                amount=Decimal(order.total_amount),
+                amount=Decimal(str(order.total_amount)),
                 ref_doc=f"CANCEL-INV-SEC-{order.id}"
             )
 
