@@ -20,6 +20,6 @@ class Shipment(Base):
     estimated_arrival_date = Column(Date, nullable=True)
     actual_arrival_date = Column(Date, nullable=True)
 
-    status = Column(String(50), default="In Transit")  # "In Transit", "Delivered", "Delayed"
+    status = Column(String(50), default="In Transit")
 
     order = relationship("PrimaryOrder", back_populates="shipment")

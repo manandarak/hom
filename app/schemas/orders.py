@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class OrderItemBase(BaseModel):
     product_id: int
-    quantity: Field(..., gt=0)
+    quantity: int = Field(..., gt=0)
     batch_number: str
 
 

@@ -8,12 +8,12 @@ class StockLedger(Base):
     __tablename__ = "stock_ledger"
     id = Column(BigInteger, primary_key=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
-    entity_type = Column(String)
+    entity_type = Column(String(255))
     entity_id = Column(Integer)
     product_id = Column(Integer, ForeignKey("product_master.id"))
     batch_number = Column(String(50), nullable=False)
-    transaction_type = Column(String)
-    reference_document = Column(String)
+    transaction_type = Column(String(255))
+    reference_document = Column(String(255))
     quantity_change = Column(Integer)
     closing_balance = Column(Integer)
 
@@ -86,5 +86,4 @@ class DailyProductionLog(Base):
     factory_id = Column(Integer, ForeignKey("factory_master.id"), nullable=False)
     batch_number = Column(String(50), nullable=False)
     quantity_produced = Column(Integer, nullable=False)
-    batch_number = Column(String(50), nullable=False)
     production_date = Column(Date, nullable=False)

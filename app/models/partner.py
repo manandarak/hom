@@ -18,7 +18,7 @@ class SuperStockist(Base):
     gstin = Column(String(50), nullable=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
     outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
-
+    is_active = Column(Boolean, default=True)  # <-- ADDED
 
     zone = relationship("Zone")
     user = relationship("User")
@@ -39,6 +39,7 @@ class Distributor(Base):
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
     outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
+    is_active = Column(Boolean, default=True)  # <-- ADDED
 
     user = relationship("User")
     super_stockist = relationship("SuperStockist")
@@ -54,7 +55,7 @@ class Retailer(Base):
     linked_distributor_id = Column(Integer, ForeignKey("distributor.id"), nullable=True)
     shop_name = Column(String(150), nullable=True)
     shop_type = Column(String(100), nullable=True)
-
+    is_active = Column(Boolean, default=True)  # <-- ADDED
 
     contact_number = Column(String(20))
     gstin = Column(String(50))

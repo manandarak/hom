@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, List
 
 class UserBase(BaseModel):
     username: str
@@ -31,3 +31,23 @@ class UserUpdate(BaseModel):
     assigned_region_id: Optional[int] = None
     assigned_area_id: Optional[int] = None
     assigned_territory_id: Optional[int] = None
+
+
+class PermissionRead(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+class RoleBase(BaseModel):
+    name: str
+
+class RoleCreate(RoleBase):
+    pass
+
+class RoleRead(RoleBase):
+    id: int
+    permissions: List[PermissionRead] = []
+    model_config = ConfigDict(from_attributes=True)
+
+class RolePermissionUpdate(BaseModel):
+    permission_ids: List[int]

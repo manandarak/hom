@@ -8,6 +8,7 @@ class SuperStockistBase(BaseModel):
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
+    is_active: Optional[bool] = True
 
 class SuperStockistCreate(SuperStockistBase):
     pass
@@ -17,7 +18,6 @@ class SuperStockistRead(SuperStockistBase):
     model_config = ConfigDict(from_attributes=True)
     outstanding_balance: Optional[Decimal] = 0.00
 
-# --- DISTRIBUTOR ---
 class DistributorBase(BaseModel):
     state_id: int
     parent_ss_id: Optional[int] = None
@@ -26,6 +26,7 @@ class DistributorBase(BaseModel):
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
+    is_active: Optional[bool] = True
 
 class DistributorCreate(DistributorBase):
     pass
@@ -44,6 +45,7 @@ class RetailerBase(BaseModel):
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
+    is_active: Optional[bool] = True
 
 class RetailerCreate(RetailerBase):
     pass
@@ -59,6 +61,7 @@ class EndConsumerBase(BaseModel):
     name: str
     type: Optional[str] = None
     mobile_number: Optional[str] = None
+    is_active: Optional[bool] = True
 
 class EndConsumerCreate(EndConsumerBase):
     pass
@@ -68,21 +71,21 @@ class EndConsumerUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     mobile_number: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class EndConsumerRead(EndConsumerBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
     outstanding_balance: Optional[Decimal] = 0.00
 
-# Add below SuperStockistRead
 class SuperStockistUpdate(BaseModel):
     zone_id: Optional[int] = None
     firm_name: Optional[str] = None
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
+    is_active: Optional[bool] = None
 
-# Add below DistributorRead
 class DistributorUpdate(BaseModel):
     state_id: Optional[int] = None
     parent_ss_id: Optional[int] = None
@@ -91,8 +94,8 @@ class DistributorUpdate(BaseModel):
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
+    is_active: Optional[bool] = None
 
-# Add below RetailerRead
 class RetailerUpdate(BaseModel):
     territory_id: Optional[int] = None
     linked_distributor_id: Optional[int] = None
@@ -101,3 +104,4 @@ class RetailerUpdate(BaseModel):
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
+    is_active: Optional[bool] = None

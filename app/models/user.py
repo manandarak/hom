@@ -14,8 +14,8 @@ role_permissions = Table(
 class User(Base):
     __tablename__ = "users"
     id = Column(BigInteger, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    password_hash = Column(String, nullable=False)
+    username = Column(String(255), unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
 
     role_id = Column(Integer, ForeignKey("roles.id"))
@@ -31,12 +31,13 @@ class User(Base):
     area = relationship("Area")
     territory = relationship("Territory")
 
+    role = relationship("Role")
 
 class Permission(Base):
     __tablename__ = "permissions"
     __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String(255), unique=True, index=True)
 
     # This attribute must be named "roles" if Role uses back_populates="roles"
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
@@ -46,7 +47,7 @@ class Role(Base):
     __tablename__ = "roles"
     __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True)
+    name = Column(String(255), unique=True)
 
     # This attribute "permissions" matches the back_populates in the Permission class
     permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")

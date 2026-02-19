@@ -2,6 +2,10 @@ from sqlalchemy.orm import Session
 from src.app.models.user import User, Role
 from src.app.schemas.user import UserCreate
 from passlib.context import CryptContext
+from sqlalchemy.orm import Session
+from src.app.models.user import User, Role, Permission
+from src.app.schemas.user import UserCreate, RoleCreate
+from passlib.context import CryptContext
 
 # Setup password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -45,3 +49,40 @@ def update_user_status(db: Session, user_id: int, active_status: bool):
         db_user.is_active = active_status
         db.commit()
     return db_user
+
+
+def get_all_permissions(db: Session):
+    return db.query(Permission).all()
+
+
+def create_role(db: Session, role_in: RoleCreate):
+    db_role = Role(name=role_in.name)
+    db.add(db_role)
+    db.commit()
+    db.refresh(db_role)
+    return db_role
+
+
+def update_role_permissions(db: Session, role_id: int, permission_ids: list[int]):
+    role = db.query(Role).filter(Role.id == role_id).first()
+    if not role:
+        return None
+
+    # Fetch the actual permission objects requested
+    permissions = db.query(Permission).filter(Permission.id.in_(permission_ids)).all()
+
+    # --- GUARDRAIL: Restrict geographic roles to specific permissions only ---
+    restricted_roles = ["ZSM", "RSM", "ASM", "SO"]
+    admin_only_permissions = ["manage_users", "manage_roles", "manage_system"]
+
+    if role.name in restricted_roles:
+        for p in permissions:
+            if p.name in admin_only_permissions:
+                raise ValueError(
+                    f"Security Violation: Cannot assign global permission '{p.name}' to restricted field role '{role.name}'.")
+
+    # Update associations (SQLAlchemy handles the deletion and insertion in the mapping table)
+    role.permissions = permissions
+    db.commit()
+    db.refresh(role)
+    return role

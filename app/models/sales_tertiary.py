@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, Date
+from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, Date, Boolean
 from src.app.core.database import Base
 
 
@@ -9,7 +9,7 @@ class EndConsumer(Base):
     name = Column(String(255))
     type = Column(String(50))  # e.g., "Barber"
     mobile_number = Column(String(15))
-
+    is_active = Column(Boolean, default=True)
 
 class TertiaryOrder(Base):
     __tablename__ = "tertiary_order"

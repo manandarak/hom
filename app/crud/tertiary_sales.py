@@ -25,15 +25,12 @@ def create_tertiary_sale(db: Session, sale_in: TertiaryOrderCreate):
 
 
 def get_tertiary_order_by_id(db: Session, order_id: int):
-    """Fetches a single order - Required for the Approval logic to work"""
     return db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
 
 def get_tertiary_orders_by_so(db: Session, so_id: int):
-    """Fetches all sales assigned to a specific Sales Officer for review"""
     return db.query(TertiaryOrder).filter(TertiaryOrder.assigned_so_id == so_id).all()
 
 def update_tertiary_status(db: Session, order_id: int, status: str):
-    """Updates the status (e.g., to 'Approved_by_SO')"""
     db_order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
     if db_order:
         db_order.status = status
@@ -61,7 +58,7 @@ def create_end_consumer(db: Session, consumer_in: EndConsumerCreate):
     return db_consumer
 
 def get_end_consumers(db: Session):
-    return db.query(EndConsumer).all()
+    return db.query(EndConsumer).filter(EndConsumer.is_active == True).all()
 
 def update_end_consumer(db: Session, consumer_id: int, consumer_in: EndConsumerUpdate):
     db_consumer = db.query(EndConsumer).filter(EndConsumer.id == consumer_id).first()
@@ -76,7 +73,7 @@ def update_end_consumer(db: Session, consumer_id: int, consumer_in: EndConsumerU
 def delete_end_consumer(db: Session, consumer_id: int):
     db_consumer = db.query(EndConsumer).filter(EndConsumer.id == consumer_id).first()
     if db_consumer:
-        db.delete(db_consumer)
+        db_consumer.is_active = False
         db.commit()
         return True
     return False

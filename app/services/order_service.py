@@ -53,7 +53,7 @@ class OrderService:
             # 3. Calculate Pricing & Trade Schemes
             product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
             final_price, free_qty = PricingService.calculate_item_pricing(
-                db, product.id, float(product.base_price), dispatch_qty
+                db, product.id, product.base_price, dispatch_qty
             )
 
             # Safety check: Do we have physical stock to give the free items?

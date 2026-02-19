@@ -47,7 +47,7 @@ def delete_super_stockist(ss_id: int, db: Session = Depends(get_db)):
     db_ss = db.query(SuperStockist).filter(SuperStockist.id == ss_id).first()
     if not db_ss:
         raise HTTPException(status_code=404, detail="Super Stockist not found")
-    db.delete(db_ss)
+    db_ss.is_active = False
     db.commit()
     return None
 
@@ -84,7 +84,7 @@ def delete_distributor(dist_id: int, db: Session = Depends(get_db)):
     db_dist = db.query(Distributor).filter(Distributor.id == dist_id).first()
     if not db_dist:
         raise HTTPException(status_code=404, detail="Distributor not found")
-    db.delete(db_dist)
+    db_dist.is_active = False
     db.commit()
     return None
 
@@ -111,7 +111,7 @@ def update_retailer(ret_id: int, ret_in: RetailerUpdate, db: Session = Depends(g
     update_data = ret_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_ret, key, value)
-    db.commit()
+    db_ret.is_active = False
     db.refresh(db_ret)
     return db_ret
 
