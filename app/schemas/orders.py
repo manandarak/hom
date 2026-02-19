@@ -3,16 +3,16 @@ from typing import List, Optional
 from datetime import date
 from decimal import Decimal
 
-# --- SHARED ITEM SCHEMAS ---
+
 class OrderItemBase(BaseModel):
     product_id: int
-    quantity: int # cases for Primary, units for Secondary
+    quantity: int
     batch_number: str
 
-# --- PRIMARY ORDERS (Factory/SS) ---
+
 class PrimaryOrderCreate(BaseModel):
     order_number: str
-    type: str # Factory_to_SS, SS_to_DB
+    type: str
     from_entity_id: int
     to_entity_id: int
     items: List[OrderItemBase]
@@ -23,7 +23,6 @@ class PrimaryOrderRead(BaseModel):
     status: str
     model_config = ConfigDict(from_attributes=True)
 
-# --- SECONDARY ORDERS (DB to Retailer) ---
 class SecondaryOrderCreate(BaseModel):
     retailer_id: int
     distributor_id: int

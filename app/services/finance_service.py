@@ -10,7 +10,7 @@ class FinanceService:
                            trans_type: str, amount: float, ref_doc: str):
         amount = float(amount)
 
-        # 1. Fetch the correct partner and lock the row for update
+
         partner = None
         if party_type == "SuperStockist":
             partner = db.query(SuperStockist).filter(SuperStockist.id == party_id).with_for_update().first()
@@ -24,7 +24,7 @@ class FinanceService:
         if not partner:
             raise HTTPException(status_code=404, detail=f"{party_type} ID {party_id} not found")
 
-        # 2. Determine Debit (Increase Debt) vs Credit (Decrease Debt)
+
         debit = 0.00
         credit = 0.00
 
@@ -39,7 +39,7 @@ class FinanceService:
         else:
             raise ValueError(f"Unknown transaction type: {trans_type}")
 
-        # 3. Create the Immutable Ledger Entry
+
         ledger_entry = FinancialLedger(
             party_type=party_type,
             party_id=party_id,
@@ -51,6 +51,6 @@ class FinanceService:
         )
         db.add(ledger_entry)
 
-        # Flush to DB immediately so calling functions can access the ID if needed
+        
         db.flush()
         return ledger_entry

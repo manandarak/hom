@@ -81,9 +81,9 @@ def adjust_stock(
             entity_type=formatted_entity_type,
             entity_id=entity_id,
             product_id=update_in.product_id,
-            qty_change=update_in.quantity_change,  # Can be positive (found stock) or negative (shrinkage/damage)
-            ref_doc=update_in.reference_document,  # e.g., "AUDIT-FEB-2026"
-            trans_type=update_in.transaction_type  # e.g., "Adjustment", "Damage", "Return"
+            qty_change=update_in.quantity_change,
+            ref_doc=update_in.reference_document,
+            trans_type=update_in.transaction_type
         )
         db.commit()
         return {
