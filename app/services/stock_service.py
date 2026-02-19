@@ -1,17 +1,21 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status  # <-- NEW IMPORT
-from src.app.crud.inventory import get_distributor_stock, create_ledger_entry
-from src.app.models.inventory import DistributorInventory, FactoryInventory, SSInventory, RetailerInventory
-from src.app.models.inventory import DistributorInventory, FactoryInventory, SSInventory, RetailerInventory, InTransitInventory
-
+from fastapi import HTTPException, status
+from src.app.crud.inventory import create_ledger_entry
+from src.app.models.inventory import (
+    DistributorInventory,
+    FactoryInventory,
+    SSInventory,
+    RetailerInventory,
+    InTransitInventory
+)
 
 class StockService:
     @staticmethod
-    def update_stock(db: Session, entity_type: str, entity_id: int, product_id: int, qty_change: int, ref_doc: str, trans_type: str):
-        # 1. Fetch record with a pessimistic lock (via _get_stock_record)
-        stock_record = StockService._get_stock_record(db, entity_type, entity_id, product_id)
+    def update_stock(db: Session, entity_type: str, entity_id: int, product_id: int, batch_number: str, qty_change: int, ref_doc: str, trans_type: str):
+        # 1. Fetch record with a pessimistic lock
+        stock_record = StockService._get_stock_record(db, entity_type, entity_id, product_id, batch_number)
 
-        # 2. --- NEW: NEGATIVE STOCK VALIDATION ---
+        # 2. Negative Stock Validation
         if stock_record.current_stock_qty + qty_change < 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -26,6 +30,7 @@ class StockService:
             "entity_type": entity_type,
             "entity_id": entity_id,
             "product_id": product_id,
+            "batch_number": batch_number,  # Ensure ledger records the exact batch
             "transaction_type": trans_type,
             "reference_document": ref_doc,
             "quantity_change": qty_change,
@@ -35,43 +40,41 @@ class StockService:
         return stock_record
 
     @staticmethod
-    def _get_stock_record(db: Session, entity_type: str, entity_id: int, product_id: int):
+    def _get_stock_record(db: Session, entity_type: str, entity_id: int, product_id: int, batch_number: str):
         """Helper to find the correct inventory record based on entity type"""
         model = None
         record = None
 
-        # --- NEW: ADDED .with_for_update() TO ALL QUERIES TO PREVENT RACE CONDITIONS ---
         if entity_type == "Distributor":
             model = DistributorInventory
-            record = db.query(model).filter_by(distributor_id=entity_id, product_id=product_id).with_for_update().first()
+            record = db.query(model).filter_by(distributor_id=entity_id, batch_number=batch_number, product_id=product_id).with_for_update().first()
         elif entity_type == "Factory":
             model = FactoryInventory
-            record = db.query(model).filter_by(factory_id=entity_id, product_id=product_id).with_for_update().first()
+            record = db.query(model).filter_by(factory_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
         elif entity_type == "SuperStockist":
             model = SSInventory
-            record = db.query(model).filter_by(ss_id=entity_id, product_id=product_id).with_for_update().first()
+            record = db.query(model).filter_by(ss_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
         elif entity_type == "Retailer":
             model = RetailerInventory
-            record = db.query(model).filter_by(retailer_id=entity_id, product_id=product_id).with_for_update().first()
+            record = db.query(model).filter_by(retailer_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
         elif entity_type == "InTransit":
             model = InTransitInventory
-            # For InTransit, the entity_id is actually the order_id
-            record = db.query(model).filter_by(order_id=entity_id, product_id=product_id).with_for_update().first()
+            record = db.query(model).filter_by(order_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
         else:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        # If no record exists, initialize it at 0 (Safe because transaction locks the insert)
+        # If no record exists, initialize it at 0
         if not record:
             if entity_type == "Distributor":
-                record = DistributorInventory(distributor_id=entity_id, product_id=product_id, current_stock_qty=0)
+                record = DistributorInventory(distributor_id=entity_id, product_id=product_id, batch_number=batch_number, current_stock_qty=0)
             elif entity_type == "Factory":
-                record = FactoryInventory(factory_id=entity_id, product_id=product_id, current_stock_qty=0)
+                record = FactoryInventory(factory_id=entity_id, product_id=product_id, batch_number=batch_number, current_stock_qty=0)
             elif entity_type == "SuperStockist":
-                record = SSInventory(ss_id=entity_id, product_id=product_id, current_stock_qty=0)
+                record = SSInventory(ss_id=entity_id, product_id=product_id, batch_number=batch_number, current_stock_qty=0)
             elif entity_type == "Retailer":
-                record = RetailerInventory(retailer_id=entity_id, product_id=product_id, current_stock_qty=0)
+                record = RetailerInventory(retailer_id=entity_id, product_id=product_id, batch_number=batch_number, current_stock_qty=0)
             elif entity_type == "InTransit":
-                record = InTransitInventory(order_id=entity_id, product_id=product_id, current_stock_qty=0)
+                record = InTransitInventory(order_id=entity_id, product_id=product_id, batch_number=batch_number, current_stock_qty=0)
 
             db.add(record)
             db.flush()

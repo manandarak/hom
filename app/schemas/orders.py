@@ -2,11 +2,11 @@ from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import date
 from decimal import Decimal
-
+from pydantic import BaseModel, Field
 
 class OrderItemBase(BaseModel):
     product_id: int
-    quantity: int
+    quantity: Field(..., gt=0)
     batch_number: str
 
 

@@ -48,9 +48,9 @@ def get_scoped_pending_orders(db: Session, scope_filter: dict):
     if not scope_filter:
         return query.all()
 
-    return query.join(
-        User, TertiaryOrder.assigned_so_id == User.id
-    ).filter_by(**scope_filter).all()
+    user_filters = [getattr(User, key) == value for key, value in scope_filter.items()]
+
+    return query.join(User, TertiaryOrder.assigned_so_id == User.id).filter(*user_filters).all()
 
 
 def create_end_consumer(db: Session, consumer_in: EndConsumerCreate):

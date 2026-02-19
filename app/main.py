@@ -10,7 +10,6 @@ from src.app.v1 import (
     tertiary_sales,
     geography,
     product,
-    production
 )
 from fastapi import APIRouter, Depends, HTTPException, status
 from src.app.core.config import settings
@@ -75,25 +74,14 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["01. Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["02. User Management"])
-
-
 app.include_router(geography.router, prefix="/api/v1/geo", tags=["03. Geography"])
 app.include_router(product.router, prefix="/api/v1/products",  tags=["04. Products"])
-
-
-app.include_router(production.router, prefix="/api/v1/production", tags=["05. Factory Production"])
-app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["06. Stock Management"])
-
-
-app.include_router(primary_sales.router, prefix="/api/v1/primary-orders", tags=["07. Primary Sales (Factory -> SS)"])
-app.include_router(secondary_sales.router, prefix="/api/v1/secondary-sales",
-                   tags=["08. Secondary Sales (DB -> Retailer)"])
-app.include_router(tertiary_sales.router, prefix="/api/v1/tertiary-sales",
-                   tags=["09. Tertiary Sales (Retailer -> Barber)"])
-
-app.include_router(partner.router, prefix="/api/v1/partners", tags=["10. Partners"])
-
-app.include_router(finance.router, prefix="/api/v1/finance", tags=["11. Finance & A/R"])
+app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["05. Stock Management"])
+app.include_router(primary_sales.router, prefix="/api/v1/primary-orders", tags=["06. Primary Sales (Factory -> SS)"])
+app.include_router(secondary_sales.router, prefix="/api/v1/secondary-sales",tags=["07. Secondary Sales (DB -> Retailer)"])
+app.include_router(tertiary_sales.router, prefix="/api/v1/tertiary-sales",tags=["08. Tertiary Sales (Retailer -> Barber)"])
+app.include_router(partner.router, prefix="/api/v1/partners", tags=["9. Partners"])
+app.include_router(finance.router, prefix="/api/v1/finance", tags=["10. Finance & A/R"])
 
 
 @app.get("/", tags=["Health Check"])
@@ -107,5 +95,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("src.app.main:app", host="127.0.0.1", port=8000, reload=True)

@@ -9,7 +9,7 @@ from src.app.services.stock_service import StockService
 from src.app.crud.secondary_sales import create_secondary_order
 from fastapi import APIRouter, Depends, HTTPException, status
 # Important Imports
-
+from decimal import Decimal
 from src.app.services.stock_service import StockService
 from src.app.services.finance_service import FinanceService
 from src.app.models.partner import Retailer, Distributor
@@ -65,11 +65,11 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
                 raise HTTPException(status_code=400, detail=f"Product {item.product_id} not found")
 
             # --- TAX CALCULATION FIX ---
-            base_item_amount = item.quantity * float(product.base_price)
+            base_item_amount = item.quantity * Decimal(product.base_price)
 
             tax_details = TaxService.calculate_gst(
                 base_amount=base_item_amount,
-                gst_percent=float(product.gst_percent),
+                gst_percent=Decimal(product.gst_percent),
                 seller_state_id=seller_state_id,
                 buyer_state_id=buyer_state_id
             )
@@ -176,7 +176,7 @@ def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
                 party_type="Retailer",
                 party_id=order.retailer_id,
                 trans_type="CREDIT_NOTE",  # CREDIT_NOTE reduces the outstanding balance
-                amount=float(order.total_amount),
+                amount=Decimal(order.total_amount),
                 ref_doc=f"CANCEL-INV-SEC-{order.id}"
             )
 
