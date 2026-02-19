@@ -2,13 +2,13 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from src.app.models.finance import FinancialLedger
 from src.app.models.partner import SuperStockist, Distributor, Retailer
-
+from decimal import Decimal
 
 class FinanceService:
     @staticmethod
     def record_transaction(db: Session, party_type: str, party_id: int,
-                           trans_type: str, amount: float, ref_doc: str):
-        amount = float(amount)
+                           trans_type: str, amount: Decimal, ref_doc: str):
+        amount = Decimal(amount)
 
 
         partner = None
@@ -28,7 +28,7 @@ class FinanceService:
         debit = 0.00
         credit = 0.00
 
-        current_balance = float(partner.outstanding_balance or 0.00)
+        current_balance = Decimal(partner.outstanding_balance or 0.00)
 
         if trans_type in ["INVOICE", "DEBIT_NOTE"]:
             debit = amount

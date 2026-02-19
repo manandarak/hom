@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from src.app.models.geography import Territory, Area, Region
+from decimal import Decimal
 
 class TaxService:
     @staticmethod
@@ -14,7 +15,7 @@ class TaxService:
         return state_id
 
     @staticmethod
-    def calculate_gst(base_amount: float, gst_percent: float, seller_state_id: int, buyer_state_id: int):
+    def calculate_gst(base_amount: Decimal, gst_percent: Decimal, seller_state_id: int, buyer_state_id: int):
         """Calculates CGST/SGST vs IGST based on location."""
         total_tax_amount = base_amount * (gst_percent / 100)
 

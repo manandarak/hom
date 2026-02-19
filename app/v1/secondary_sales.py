@@ -9,6 +9,9 @@ from src.app.services.stock_service import StockService
 from src.app.crud.secondary_sales import create_secondary_order
 from fastapi import APIRouter, Depends, HTTPException, status
 # Important Imports
+
+from src.app.services.stock_service import StockService
+from src.app.services.finance_service import FinanceService
 from src.app.models.partner import Retailer, Distributor
 from src.app.models.product import ProductMaster
 from src.app.services.finance_service import FinanceService
@@ -101,7 +104,8 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
         # 5. Log Header to Database
         db_order = create_secondary_order(
             db=db, retailer_id=sale_in.retailer_id, distributor_id=sale_in.distributor_id,
-            items_in=[item.model_dump() for item in sale_in.items]
+            items_in=[item.model_dump() for item in sale_in.items],
+            total_amount = total_invoice_amount
         )
 
         db.commit()
@@ -124,54 +128,63 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
 
 @router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
 def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
-    """Cancels a secondary order if it is still pending."""
-    order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
+    """Cancels a secondary order, reverting stock and financial balances."""
+    try:
+        order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Secondary Order not found")
+        if not order:
+            raise HTTPException(status_code=404, detail="Secondary Order not found")
 
-    if order.status != "Pending":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel order. Current status is '{order.status}'."
-        )
+        if order.status != "Pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel order. Current status is '{order.status}'."
+            )
 
-    order.status = "Cancelled"
-    db.commit()
-    return {"message": f"Secondary Order {order.id} has been cancelled successfully."}
+        # 1. Revert Inventory Movements
+        for item in order.items:
+            # Take stock away from Retailer
+            StockService.update_stock(
+                db=db,
+                entity_type="Retailer",
+                entity_id=order.retailer_id,
+                product_id=item.product_id,
+                batch_number=item.batch_number,
+                qty_change=-item.quantity_units,  # Negative to remove
+                ref_doc=f"CANCEL-SEC-{order.id}",
+                trans_type="CANCEL_SECONDARY_IN"
+            )
 
+            # Give stock back to Distributor
+            StockService.update_stock(
+                db=db,
+                entity_type="Distributor",
+                entity_id=order.distributor_id,
+                product_id=item.product_id,
+                batch_number=item.batch_number,
+                qty_change=item.quantity_units,  # Positive to add back
+                ref_doc=f"CANCEL-SEC-{order.id}",
+                trans_type="CANCEL_SECONDARY_OUT"
+            )
 
-@router.put("/{order_id}", status_code=status.HTTP_200_OK)
-def update_secondary_order(order_id: int, update_in: SecondaryOrderCreate, db: Session = Depends(get_db)):
-    """Updates the items in a secondary order before fulfillment."""
-    order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
+        # 2. Revert Financial Ledger (Issue Credit Note)
+        # Note: Ensure that `order.total_amount` is actually being saved during creation.
+        # If it's missing, you may need to recalculate it or fetch the original ledger entry.
+        if order.total_amount and order.total_amount > 0:
+            FinanceService.record_transaction(
+                db=db,
+                party_type="Retailer",
+                party_id=order.retailer_id,
+                trans_type="CREDIT_NOTE",  # CREDIT_NOTE reduces the outstanding balance
+                amount=float(order.total_amount),
+                ref_doc=f"CANCEL-INV-SEC-{order.id}"
+            )
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Secondary Order not found")
+        # 3. Update Status
+        order.status = "Cancelled"
+        db.commit()
+        return {"message": f"Secondary Order {order.id} has been cancelled successfully, stock and finances reverted."}
 
-    if order.status != "Pending":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot update order in '{order.status}' status."
-        )
-
-    # Update Header Information (if they changed the distributor or retailer)
-    order.distributor_id = update_in.distributor_id
-    order.retailer_id = update_in.retailer_id
-
-    # 1. Delete the old items completely
-    db.query(SecondaryOrderItems).filter(SecondaryOrderItems.secondary_order_id == order_id).delete()
-    db.flush()
-
-    # 2. Insert the fresh, corrected items
-    for item in update_in.items:
-        new_item = SecondaryOrderItems(
-            secondary_order_id=order.id,
-            product_id=item.product_id,
-            batch_number=item.batch_number,
-            quantity_units=item.quantity  # Note: mapped to quantity_units in secondary
-        )
-        db.add(new_item)
-
-    db.commit()
-    return {"message": f"Secondary Order {order.id} updated successfully."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))

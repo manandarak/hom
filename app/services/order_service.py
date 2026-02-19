@@ -131,38 +131,46 @@ class OrderService:
             raise HTTPException(status_code=404, detail="Order not found")
         if order.status == "Received":
             return {"message": "Order already processed"}
-        if order.status != "Dispatched":
+        if order.status != "Dispatched" and order.status != "Partially Dispatched":
             raise HTTPException(status_code=400, detail=f"Cannot receive order. Current status is {order.status}.")
 
-        # --- NEW: Get dynamic routing ---
         from_entity_type, to_entity_type = OrderService.get_routing_entities(order.type)
 
         for item in order.items:
-            # Deduct from In-Transit
-            StockService.update_stock(
-                db=db,
-                entity_type="InTransit",
-                entity_id=order.id,
-                product_id=item.product_id,
-                qty_change=-item.quantity_cases,
-                ref_doc=order.order_number,
-                trans_type="RECEIPT_OUT_TRANSIT"
-            )
+            # FIX: Calculate exactly what was physically sent (Paid + Free)
+            actual_received_qty = item.dispatched_cases + item.free_cases
 
-            # --- NEW: Add dynamically to the correct destination ---
-            StockService.update_stock(
-                db=db,
-                entity_type=to_entity_type,  # No longer hardcoded to "SuperStockist"!
-                entity_id=order.to_entity_id,
-                product_id=item.product_id,
-                qty_change=item.quantity_cases,
-                ref_doc=order.order_number,
-                trans_type=f"RECEIPT_IN_{to_entity_type.upper()}"
-            )
+            # Only process if something was actually dispatched for this item
+            if actual_received_qty > 0:
+                # 1. Deduct exact physical qty from In-Transit
+                StockService.update_stock(
+                    db=db,
+                    entity_type="InTransit",
+                    entity_id=order.id,
+                    product_id=item.product_id,
+                    batch_number=item.batch_number,  # Ensure batch_number is passed
+                    qty_change=-actual_received_qty,
+                    ref_doc=order.order_number,
+                    trans_type="RECEIPT_OUT_TRANSIT"
+                )
 
+                # 2. Add exact physical qty to the destination (SS or Distributor)
+                StockService.update_stock(
+                    db=db,
+                    entity_type=to_entity_type,
+                    entity_id=order.to_entity_id,
+                    product_id=item.product_id,
+                    batch_number=item.batch_number,  # Ensure batch_number is passed
+                    qty_change=actual_received_qty,
+                    ref_doc=order.order_number,
+                    trans_type=f"RECEIPT_IN_{to_entity_type.upper()}"
+                )
+
+        # Only mark as fully "Received" if there are no more backorders
+        # Otherwise, you might want a "Partially Received" status
         order.status = "Received"
         db.commit()
-        return {"message": f"Order received successfully and stock delivered to {to_entity_type}."}
+        return {"message": f"Stock successfully delivered to {to_entity_type}."}
 
     @staticmethod
     def get_routing_entities(order_type: str):
