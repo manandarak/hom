@@ -2,24 +2,14 @@ from datetime import datetime
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
-# Core Database
 from src.app.core.database import get_db
-
-# Models
 from src.app.models.sales_secondary import SecondaryOrder, SecondaryOrderItems
 from src.app.models.partner import Retailer, Distributor
-from src.app.models.product import ProductMaster      # Fixed from ProductMaster
-
-# Schemas
+from src.app.models.product import ProductMaster
 from src.app.schemas.orders import SecondaryOrderCreate
-
-# Services
 from src.app.services.stock_service import StockService
 from src.app.services.finance_service import FinanceService
 from src.app.services.tax_service import TaxService
-
-# CRUD
 from src.app.crud.secondary_sales import create_secondary_order
 
 router = APIRouter()
@@ -74,7 +64,6 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
             total_sgst += tax_details["sgst"]
             total_igst += tax_details["igst"]
 
-            # --- Move Physical Stock ---
             StockService.update_stock(
                 db=db, entity_type="Distributor", entity_id=sale_in.distributor_id,
                 product_id=item.product_id, batch_number=item.batch_number,
@@ -137,7 +126,7 @@ def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
                 entity_id=order.retailer_id,
                 product_id=item.product_id,
                 batch_number=item.batch_number,
-                qty_change=-item.quantity_units,  # Negative to remove
+                qty_change=-item.quantity_units,
                 ref_doc=f"CANCEL-SEC-{order.id}",
                 trans_type="CANCEL_SECONDARY_IN"
             )

@@ -5,12 +5,11 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-
 from src.app.core.config import settings
 from src.app.core.database import get_db
-from src.app.models.user import User  # We need the User model to find them in DB
+from src.app.models.user import User
 
-# 1. Password Hashing setup
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -57,7 +56,6 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    # Check if user exists in DB
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception
