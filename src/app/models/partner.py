@@ -13,6 +13,7 @@ class SuperStockist(Base):
 
     firm_name = Column(String(150), nullable=True)
 
+    contact_person =  Column(String(50), nullable=True)
 
     contact_number = Column(String(20), nullable=True)
     gstin = Column(String(50), nullable=True)
@@ -34,7 +35,7 @@ class Distributor(Base):
     is_direct_party = Column(Boolean, default=False)
     firm_name = Column(String(150), nullable=True)
 
-
+    contact_person = Column(String(50), nullable=True)
     contact_number = Column(String(20))
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
@@ -56,7 +57,7 @@ class Retailer(Base):
     shop_name = Column(String(150), nullable=True)
     shop_type = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)  # <-- ADDED
-
+    contact_person = Column(String(50), nullable=True)
     contact_number = Column(String(20))
     gstin = Column(String(50))
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)

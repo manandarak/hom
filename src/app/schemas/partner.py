@@ -7,6 +7,7 @@ class SuperStockistBase(BaseModel):
     firm_name: str
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
+    contact_person: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = True
 
@@ -23,6 +24,7 @@ class DistributorBase(BaseModel):
     parent_ss_id: Optional[int] = None
     is_direct_party: Optional[bool] = False
     firm_name: Optional[str] = None
+    contact_person : Optional[str] = None
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
@@ -43,6 +45,7 @@ class RetailerBase(BaseModel):
     shop_name: Optional[str] = None
     shop_type: Optional[str] = None
     contact_number: Optional[str] = None
+    contact_person: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = True
@@ -62,6 +65,7 @@ class EndConsumerBase(BaseModel):
     type: Optional[str] = None
     mobile_number: Optional[str] = None
     is_active: Optional[bool] = True
+    contact_person: Optional[str] = None
 
 class EndConsumerCreate(EndConsumerBase):
     pass
@@ -82,6 +86,7 @@ class SuperStockistUpdate(BaseModel):
     zone_id: Optional[int] = None
     firm_name: Optional[str] = None
     contact_number: Optional[str] = None
+    contact_person: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = None
@@ -91,6 +96,7 @@ class DistributorUpdate(BaseModel):
     parent_ss_id: Optional[int] = None
     is_direct_party: Optional[bool] = None
     firm_name: Optional[str] = None
+    contact_person: Optional[str] = None
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None
@@ -101,6 +107,7 @@ class RetailerUpdate(BaseModel):
     linked_distributor_id: Optional[int] = None
     shop_name: Optional[str] = None
     shop_type: Optional[str] = None
+    contact_person: Optional[str] = None
     contact_number: Optional[str] = None
     gstin: Optional[str] = None
     user_id: Optional[int] = None

@@ -45,21 +45,23 @@ class StockService:
         model = None
         record = None
 
+        # FIX: We removed `batch_number` from the filter_by queries.
+        # We only search by the Entity ID and the Product ID to prevent 1062 Duplicate Errors.
         if entity_type == "Distributor":
             model = DistributorInventory
-            record = db.query(model).filter_by(distributor_id=entity_id, batch_number=batch_number, product_id=product_id).with_for_update().first()
+            record = db.query(model).filter_by(distributor_id=entity_id, product_id=product_id).with_for_update().first()
         elif entity_type == "Factory":
             model = FactoryInventory
-            record = db.query(model).filter_by(factory_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
+            record = db.query(model).filter_by(factory_id=entity_id, product_id=product_id).with_for_update().first()
         elif entity_type == "SuperStockist":
             model = SSInventory
-            record = db.query(model).filter_by(ss_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
+            record = db.query(model).filter_by(ss_id=entity_id, product_id=product_id).with_for_update().first()
         elif entity_type == "Retailer":
             model = RetailerInventory
-            record = db.query(model).filter_by(retailer_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
+            record = db.query(model).filter_by(retailer_id=entity_id, product_id=product_id).with_for_update().first()
         elif entity_type == "InTransit":
             model = InTransitInventory
-            record = db.query(model).filter_by(order_id=entity_id, product_id=product_id, batch_number=batch_number).with_for_update().first()
+            record = db.query(model).filter_by(order_id=entity_id, product_id=product_id).with_for_update().first()
         else:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
@@ -78,6 +80,10 @@ class StockService:
 
             db.add(record)
             db.flush()
+        else:
+            # FIX: If the record DOES exist, simply update the batch number to the latest one
+            if batch_number:
+                record.batch_number = batch_number
 
         return record
 

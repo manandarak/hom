@@ -13,7 +13,7 @@ router = APIRouter()
 def get_factory_stock(factory_id: int, db: Session = Depends(get_db)):
     from src.app.models.inventory import FactoryInventory
     stock = db.query(FactoryInventory).filter(FactoryInventory.factory_id == factory_id).all()
-    return [{"product_id": s.product_id, "current_stock": s.current_stock_qty} for s in stock]
+    return [{"product_id": s.product_id, "batch_number": s.batch_number, "current_stock": s.current_stock_qty} for s in stock]
 
 @router.post("/factory/produce", status_code=201)
 def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(get_db)):
@@ -36,7 +36,8 @@ def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(ge
             product_id=log_in.product_id,
             qty_change=log_in.quantity_produced,
             ref_doc=f"BATCH-{log_in.batch_number}",
-            trans_type="PRODUCTION"
+            trans_type="PRODUCTION",
+            batch_number=log_in.batch_number
         )
 
         db.commit()

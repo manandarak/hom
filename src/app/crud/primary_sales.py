@@ -20,7 +20,8 @@ def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
         db_item = PrimaryOrderItems(
             primary_order_id=db_order.id,
             product_id=item.product_id,
-            quantity_cases=item.quantity  # Mapping 'quantity' from schema to 'quantity_cases' in DB
+            quantity_cases=item.quantity ,
+            batch_number=item.batch_number # Mapping 'quantity' from schema to 'quantity_cases' in DB
         )
         db.add(db_item)
 
