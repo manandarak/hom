@@ -10,6 +10,8 @@ class EndConsumer(Base):
     type = Column(String(50))  # e.g., "Barber"
     mobile_number = Column(String(15))
     is_active = Column(Boolean, default=True)
+    contact_person = Column(String(50), nullable=True)
+    address = Column(String(255), nullable=True)
 
 class TertiaryOrder(Base):
     __tablename__ = "tertiary_order"
@@ -23,6 +25,8 @@ class TertiaryOrder(Base):
     product_id = Column(Integer, ForeignKey("product_master.id"))
     quantity = Column(Integer)
     # ---------------------------
+    # contact_person = Column(String(50), nullable=True)
+    # address = Column(String(255), nullable=True)
 
     status = Column(String(50))
     # order = relationship("SecondaryOrder", back_populates="items")

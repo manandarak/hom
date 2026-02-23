@@ -4,6 +4,8 @@ from src.app.core.database import get_db
 from src.app.schemas.finance import PaymentCreate, FinancialLedgerRead
 from src.app.services.finance_service import FinanceService
 from src.app.models.finance import FinancialLedger
+from sqlalchemy import func
+from src.app.models.partner import SuperStockist, Distributor, Retailer
 
 router = APIRouter()
 
@@ -41,3 +43,32 @@ def get_party_ledger(party_type: str, party_id: int, db: Session = Depends(get_d
         FinancialLedger.party_type == party_type,
         FinancialLedger.party_id == party_id
     ).order_by(FinancialLedger.created_at.desc()).all()
+
+
+@router.get("/summary", summary="Get Global Company Financial Summary")
+def get_company_finance_summary(db: Session = Depends(get_db)):
+    """Calculates total outstanding receivables across all partner tiers."""
+
+    # Calculate Total Outstanding (Money owed to the company)
+    ss_owed = db.query(func.sum(SuperStockist.outstanding_balance)).scalar() or 0.00
+    dist_owed = db.query(func.sum(Distributor.outstanding_balance)).scalar() or 0.00
+    ret_owed = db.query(func.sum(Retailer.outstanding_balance)).scalar() or 0.00
+
+    total_receivables = float(ss_owed) + float(dist_owed) + float(ret_owed)
+
+    # Fetch the 50 most recent transactions across the entire company
+    recent_transactions = db.query(FinancialLedger).order_by(
+        FinancialLedger.created_at.desc()
+    ).limit(50).all()
+
+    return {
+        "metrics": {
+            "total_receivables": total_receivables,
+            "breakdown": {
+                "super_stockists": float(ss_owed),
+                "distributors": float(dist_owed),
+                "retailers": float(ret_owed)
+            }
+        },
+        "recent_global_transactions": recent_transactions
+    }

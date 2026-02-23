@@ -19,4 +19,5 @@ class FinancialLedger(Base):
     # The Math
     debit_amount = Column(DECIMAL(12, 2), default=0.00)  # Amount added to their debt
     credit_amount = Column(DECIMAL(12, 2), default=0.00)  # Amount paid off
-    closing_balance = Column(DECIMAL(12, 2), nullable=False)  # Total outstanding after this txn
+    closing_balance = Column(DECIMAL(12, 2), nullable=False)
+    remarks = Column(String(255), nullable=True)

@@ -66,6 +66,7 @@ class EndConsumerBase(BaseModel):
     mobile_number: Optional[str] = None
     is_active: Optional[bool] = True
     contact_person: Optional[str] = None
+    address: Optional[str] = None
 
 class EndConsumerCreate(EndConsumerBase):
     pass
