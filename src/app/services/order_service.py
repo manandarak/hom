@@ -9,6 +9,8 @@ from src.app.services.finance_service import FinanceService
 from src.app.models.logistics import Shipment
 from src.app.schemas.orders import DispatchPayload
 import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 
 class OrderService:
@@ -18,7 +20,9 @@ class OrderService:
         if not order or order.status not in ["Pending", "Partially Dispatched"]:
             raise HTTPException(status_code=400, detail="Order cannot be dispatched")
 
-        total_invoice_amount = 0.00
+        # CHANGE 1: Initialize as a Decimal, not a float
+        total_invoice_amount = Decimal("0.00")
+
         from_entity_type, to_entity_type = OrderService.get_routing_entities(order.type)
 
         is_completely_fulfilled = True
@@ -41,10 +45,9 @@ class OrderService:
             backorder_qty = qty_to_fulfill - dispatch_qty
 
             if backorder_qty > 0:
-                is_completely_fulfilled = False  # We couldn't fulfill the whole order
+                is_completely_fulfilled = False
 
             if dispatch_qty == 0:
-                # Out of stock entirely for this batch. Mark as backordered and skip pricing/deduction.
                 item.backordered_cases = qty_to_fulfill
                 continue
 
@@ -56,12 +59,13 @@ class OrderService:
                 db, product.id, product.base_price, dispatch_qty
             )
 
-            # Safety check: Do we have physical stock to give the free items?
             if (dispatch_qty + free_qty) > available_stock:
-                free_qty = available_stock - dispatch_qty  # Cap free items to what's physically left
+                free_qty = available_stock - dispatch_qty
 
-            # 4. Invoice Math (Only charge for dispatch_qty, not free_qty)
-            amount = dispatch_qty * final_price * (1 + (product.gst_percent / 100))
+                # CHANGE 2: Convert GST math to Decimal to prevent TypeError
+            gst_multiplier = Decimal("1") + (Decimal(str(product.gst_percent)) / Decimal("100"))
+            amount = Decimal(str(dispatch_qty)) * final_price * gst_multiplier
+
             total_invoice_amount += amount
 
             # Update DB Item Status

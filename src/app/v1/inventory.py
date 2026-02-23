@@ -6,6 +6,7 @@ from src.app.models.inventory import DailyProductionLog, FactoryInventory, Stock
 from src.app.services.stock_service import StockService
 from src.app.models.inventory import StockLedger
 from src.app.schemas.inventory import StockLedgerRead, StockUpdate
+from src.app.models.inventory import DistributorInventory # Add to imports if not there
 
 router = APIRouter()
 
@@ -51,7 +52,7 @@ def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(ge
 def get_ss_stock(ss_id: int, db: Session = Depends(get_db)):
     """Fetches all stock sitting with a specific Super Stockist"""
     stock = db.query(SSInventory).filter(SSInventory.ss_id == ss_id).all()
-    return [{"product_id": s.product_id, "current_stock": s.current_stock_qty} for s in stock]
+    return [{"product_id": s.product_id, "batch_number": s.batch_number, "current_stock": s.current_stock_qty} for s in stock]
 
 
 @router.get("/ledger", response_model=list[StockLedgerRead])
@@ -99,3 +100,18 @@ def adjust_stock(
         db.rollback()
         # If the negative stock validation fails, it will bubble up the HTTPException here
         raise e
+
+
+@router.get("/distributor/{distributor_id}")
+def get_distributor_stock(distributor_id: int, db: Session = Depends(get_db)):
+    """Fetches all stock and batches sitting with a specific Distributor"""
+    stock = db.query(DistributorInventory).filter(DistributorInventory.distributor_id == distributor_id).all()
+
+    return [
+        {
+            "product_id": s.product_id,
+            "batch_number": s.batch_number,
+            "current_stock": s.current_stock_qty
+        }
+        for s in stock
+    ]

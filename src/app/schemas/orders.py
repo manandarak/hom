@@ -17,12 +17,6 @@ class PrimaryOrderCreate(BaseModel):
     to_entity_id: int
     items: List[OrderItemBase]
 
-class PrimaryOrderRead(BaseModel):
-    id: int
-    order_number: str
-    status: str
-    model_config = ConfigDict(from_attributes=True)
-
 class SecondaryOrderCreate(BaseModel):
     retailer_id: int
     distributor_id: int
@@ -44,20 +38,51 @@ class DispatchPayload(BaseModel):
 
 class OrderItemRead(BaseModel):
     product_id: int
-    quantity_cases: int  # or quantity, whatever your model uses
+    quantity_cases: int
     batch_number: Optional[str] = None
 
     class Config:
-        from_attributes = True # This tells Pydantic to read from SQLAlchemy
+        from_attributes = True
 
-# 2. Update the main Order Read schema to include the missing data!
+
+class ShipmentRead(BaseModel):
+    transporter_name: str
+    vehicle_number: str
+    lr_number: str
+    estimated_arrival_date: date
+    driver_phone: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PrimaryOrderRead(BaseModel):
     id: int
     order_number: str
     status: str
-    ss_id: Optional[int] = None           # <--- ADD THIS
-    to_entity_id: Optional[int] = None    # <--- OR THIS (depending on your model)
-    items: List[OrderItemRead] = []       # <--- ADD THIS (This is the most important part)
+    ss_id: Optional[int] = None
+    to_entity_id: Optional[int] = None
+    items: List[OrderItemRead] = []
+    shipment: Optional[ShipmentRead] = None
+
+    class Config:
+        from_attributes = True
+
+class PrimaryOrderRead(BaseModel):
+    id: int
+    order_number: str
+    status: str
+    type: str                           # <--- ADD THIS
+    from_entity_id: int                 # <--- ADD THIS
+    ss_id: Optional[int] = None
+    to_entity_id: Optional[int] = None
+    items: List[OrderItemRead] = []
+    shipment: Optional[ShipmentRead] = None
+
+class SecondaryOrderRead(BaseModel):
+    id: int
+    distributor_id: int
+    retailer_id: int
+    status: str
+    items: List[OrderItemRead] = []
 
     class Config:
         from_attributes = True

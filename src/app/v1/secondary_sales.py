@@ -11,6 +11,7 @@ from src.app.services.stock_service import StockService
 from src.app.services.finance_service import FinanceService
 from src.app.services.tax_service import TaxService
 from src.app.crud.secondary_sales import create_secondary_order
+from src.app.schemas.orders import SecondaryOrderRead
 
 router = APIRouter()
 
@@ -159,3 +160,8 @@ def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/", response_model=list[SecondaryOrderRead])
+def get_all_secondary_orders(db: Session = Depends(get_db)):
+    """Fetch all secondary orders for the table view"""
+    return db.query(SecondaryOrder).order_by(SecondaryOrder.id.desc()).all()
