@@ -7,7 +7,6 @@ from src.app.core.security import create_access_token
 
 router = APIRouter()
 
-
 @router.post("/login")
 def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
 
@@ -20,4 +19,21 @@ def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = 
 
     access_token = create_access_token(subject=user.username)
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    # Extract permissions for the frontend to manage UI state
+    permissions = []
+    role_name = "Unknown"
+    if user.role:
+        role_name = user.role.name
+        if user.role.permissions:
+            permissions = [p.name for p in user.role.permissions]
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": role_name,
+            "permissions": permissions
+        }
+    }

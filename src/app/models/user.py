@@ -33,11 +33,15 @@ class User(Base):
 
     role = relationship("Role")
 
+
 class Permission(Base):
     __tablename__ = "permissions"
     __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, index=True)
+
+    # ADDED THIS:
+    description = Column(String(255), nullable=True)
 
     # This attribute must be named "roles" if Role uses back_populates="roles"
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
@@ -48,6 +52,9 @@ class Role(Base):
     __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True)
+
+    # ADDED THIS:
+    description = Column(String(255), nullable=True)
 
     # This attribute "permissions" matches the back_populates in the Permission class
     permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")

@@ -20,6 +20,7 @@ from src.app.crud.user import (
     create_user, create_role, get_all_permissions, update_role_permissions
 )
 from src.app.core.security import check_permissions
+from src.app.models.user import Permission
 
 router = APIRouter()
 
@@ -107,3 +108,30 @@ def modify_role_permissions(
 def get_my_profile(current_user: User = Depends(get_current_user)):
     """Fetch the profile and role details of the currently logged-in user."""
     return current_user
+
+
+@router.post("/seed-permissions", status_code=status.HTTP_201_CREATED)
+def seed_default_permissions(db: Session = Depends(get_db)):
+    """Run this ONCE to populate your database with the permission checkboxes"""
+
+    default_permissions = [
+        {"name": "view_dashboard", "description": "Can access the main dashboard"},
+        {"name": "view_inventory", "description": "Can view stock levels"},
+        {"name": "manage_inventory", "description": "Can adjust or add stock"},
+        {"name": "view_own_orders", "description": "Can view orders assigned to their geo-scope"},
+        {"name": "view_all_orders", "description": "Can view ALL company orders (Admin/ZSM level)"},
+        {"name": "create_primary_order", "description": "Can place primary factory orders"},
+        {"name": "create_secondary_order", "description": "Can place secondary orders to retailers"},
+        {"name": "manage_users", "description": "Can create and edit user accounts"},
+    ]
+
+    added = 0
+    for p in default_permissions:
+        exists = db.query(Permission).filter(Permission.name == p["name"]).first()
+        if not exists:
+            new_perm = Permission(name=p["name"], description=p["description"])
+            db.add(new_perm)
+            added += 1
+
+    db.commit()
+    return {"message": f"Successfully added {added} new permissions to the Matrix."}

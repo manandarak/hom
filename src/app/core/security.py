@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Union
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -9,17 +9,17 @@ from src.app.core.config import settings
 from src.app.core.database import get_db
 from src.app.models.user import User
 
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
+    # Updated to timezone-aware UTC to prevent Python 3.12+ deprecation warnings
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject)}
@@ -65,11 +65,28 @@ def get_current_user(
 
 def check_permissions(required_permission: str):
     def permission_checker(current_user: User = Depends(get_current_user)):
-        user_permissions = [p.name for p in current_user.role.permissions]
-        if required_permission not in user_permissions and current_user.role.name != "Admin":
+        # Failsafe if user somehow has no role assigned
+        if not current_user.role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have the required permissions for this action"
+                detail="You do not have a role assigned."
             )
+
+        # Admins bypass all explicit permission checks
+        if current_user.role.name == "Admin":
+            return current_user
+
+        # Extract permission strings safely
+        user_permissions = []
+        if current_user.role.permissions:
+            user_permissions = [p.name for p in current_user.role.permissions]
+
+        if required_permission not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You do not have the required permission: '{required_permission}'"
+            )
+
         return current_user
+
     return permission_checker
