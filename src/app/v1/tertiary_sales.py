@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-# Ensure these imports exist in your project
 from src.app.schemas.orders import TertiaryOrderCreate
 from src.app.crud.tertiary_sales import (
     get_tertiary_orders_by_so,
     update_tertiary_status,
-    get_tertiary_order_by_id  # You'll need this to find the distributor info
+    get_tertiary_order_by_id
 )
 from src.app.services.stock_service import StockService
 from src.app.core.security import get_current_user
@@ -52,7 +51,6 @@ def approve_tertiary_order(order_id: int, db: Session = Depends(get_db)):
     """
     Approves the sale and DEDUCTS stock from the Distributor.
     """
-    # 1. Get the order details
     order = get_tertiary_order_by_id(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Tertiary Order not found")
@@ -61,20 +59,17 @@ def approve_tertiary_order(order_id: int, db: Session = Depends(get_db)):
         return {"message": "Order already approved"}
 
     try:
-        # 2. Deduct Stock from Distributor
-        # This is the crucial link in the supply chain!
         StockService.update_stock(
             db=db,
             entity_type="Retailer",
-            # Use the correct Retailer ID field from your TertiaryOrder model
-            entity_id=order.fulfilled_by_retailer_id,  # Or order.retailer_id if that is what your DB uses
+            entity_id=order.fulfilled_by_retailer_id,
             product_id=order.product_id,
-            qty_change=-order.quantity,  # Negative to remove from shop
+            qty_change=-order.quantity,
             ref_doc=f"TERT-{order.id}",
+            batch_number=order.batch_number,
             trans_type="RETAIL_SALE"
         )
 
-        # 3. Update the status in the DB
         updated_order = update_tertiary_status(db, order_id, "Approved_by_SO")
         db.commit()
 
@@ -139,7 +134,7 @@ def cancel_tertiary_order(order_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{order_id}", status_code=status.HTTP_200_OK)
 def update_tertiary_order(order_id: int, update_in: TertiaryOrderCreate, db: Session = Depends(get_db)):
-    """Updates the items in a tertiary order before fulfillment."""
+    """Updates the tertiary order before fulfillment."""
     order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
 
     if not order:
@@ -151,24 +146,13 @@ def update_tertiary_order(order_id: int, update_in: TertiaryOrderCreate, db: Ses
             detail=f"Cannot update order in '{order.status}' status."
         )
 
-    # Update Header Information
+
     order.end_consumer_id = update_in.end_consumer_id
     order.fulfilled_by_retailer_id = update_in.fulfilled_by_retailer_id
     order.assigned_so_id = update_in.assigned_so_id
-
-    # 1. Delete the old items completely
-    db.query(TertiaryOrderItems).filter(TertiaryOrderItems.tertiary_order_id == order_id).delete()
-    db.flush()
-
-    # 2. Insert the fresh, corrected items
-    for item in update_in.items:
-        new_item = TertiaryOrderItems(
-            tertiary_order_id=order.id,
-            product_id=item.product_id,
-            batch_number=item.batch_number,
-            quantity=item.quantity  # Note: mapped directly to quantity in tertiary
-        )
-        db.add(new_item)
+    order.product_id = update_in.product_id
+    order.quantity = update_in.quantity
+    order.batch_number = update_in.batch_number
 
     db.commit()
     return {"message": f"Tertiary Order {order.id} updated successfully."}

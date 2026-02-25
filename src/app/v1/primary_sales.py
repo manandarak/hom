@@ -1,12 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-
-# Security imports for Data Privacy
 from src.app.core.security import get_current_user
 from src.app.models.user import User
 from src.app.models.partner import SuperStockist, Distributor
-
 from src.app.models.sales_primary import PrimaryOrder, PrimaryOrderItems
 from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead, DispatchPayload
 from src.app.crud.primary_sales import create_primary_order
@@ -17,7 +14,7 @@ router = APIRouter()
 @router.get("/", response_model=list[PrimaryOrderRead])
 def get_all_primary_orders(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # <-- FIXED DATA LEAK
+    current_user: User = Depends(get_current_user)
 ):
     """Fetch primary orders filtered dynamically based on user role."""
     query = db.query(PrimaryOrder)
@@ -27,30 +24,24 @@ def get_all_primary_orders(
 
     user_permissions = [p.name for p in current_user.role.permissions] if current_user.role.permissions else []
 
-    # 1. Admin or explicitly allowed roles see everything
     if current_user.role.name == "Admin" or "view_all_orders" in user_permissions:
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    # 2. Super Stockist sees incoming factory orders AND outgoing orders to Distributors
     if current_user.role.name == "SuperStockist":
         ss = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
         if ss:
             query = query.filter((PrimaryOrder.to_entity_id == ss.id) | (PrimaryOrder.from_entity_id == ss.id))
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    # 3. Distributor only sees incoming Primary Orders (Factory -> DB or SS -> DB)
     elif current_user.role.name == "Distributor":
         distributor = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if distributor:
-            # For distributors, to_entity_id will be their ID when type is FACTORY_TO_DB or SS_TO_DB
             query = query.filter(PrimaryOrder.to_entity_id == distributor.id)
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    # 4. Retailers have absolutely no business seeing Primary Factory orders
     elif current_user.role.name == "Retailer":
         return []
 
-    # Internal Employee Scoping (ZSM, RSM, etc.) can be expanded here later if needed
     return query.order_by(PrimaryOrder.id.desc()).all()
 
 

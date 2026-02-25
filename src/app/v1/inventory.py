@@ -2,17 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
 from src.app.schemas.inventory import ProductionLogCreate
-from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory
+from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory, RetailerInventory
 from src.app.services.stock_service import StockService
-from src.app.models.inventory import StockLedger
 from src.app.schemas.inventory import StockLedgerRead, StockUpdate
-from src.app.models.inventory import DistributorInventory # Add to imports if not there
 
 router = APIRouter()
 
 @router.get("/factory/{factory_id}")
 def get_factory_stock(factory_id: int, db: Session = Depends(get_db)):
-    from src.app.models.inventory import FactoryInventory
     stock = db.query(FactoryInventory).filter(FactoryInventory.factory_id == factory_id).all()
     return [{"product_id": s.product_id, "batch_number": s.batch_number, "current_stock": s.current_stock_qty} for s in stock]
 
@@ -28,7 +25,6 @@ def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(ge
             production_date=log_in.production_date
         )
         db.add(production_log)
-
 
         StockService.update_stock(
             db=db,
@@ -72,7 +68,6 @@ def adjust_stock(
     Manual adjustment for shrinkage, damage, returns, or audit corrections.
     entity_type must be: Factory, SuperStockist, Distributor, or Retailer
     """
-    # Standardize casing to match the StockService expectations (e.g. "distributor" -> "Distributor")
     formatted_entity_type = entity_type.capitalize()
     if formatted_entity_type == "Superstockist":
         formatted_entity_type = "SuperStockist"
@@ -94,11 +89,9 @@ def adjust_stock(
             "product_id": update_in.product_id
         }
     except ValueError as ve:
-        # Catches unknown entity types from the StockService
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         db.rollback()
-        # If the negative stock validation fails, it will bubble up the HTTPException here
         raise e
 
 
@@ -106,6 +99,21 @@ def adjust_stock(
 def get_distributor_stock(distributor_id: int, db: Session = Depends(get_db)):
     """Fetches all stock and batches sitting with a specific Distributor"""
     stock = db.query(DistributorInventory).filter(DistributorInventory.distributor_id == distributor_id).all()
+
+    return [
+        {
+            "product_id": s.product_id,
+            "batch_number": s.batch_number,
+            "current_stock": s.current_stock_qty
+        }
+        for s in stock
+    ]
+
+# --- NEW ENDPOINT TO FIX 404 ERROR ---
+@router.get("/retailer/{retailer_id}")
+def get_retailer_stock(retailer_id: int, db: Session = Depends(get_db)):
+    """Fetches all stock and batches sitting with a specific Retailer"""
+    stock = db.query(RetailerInventory).filter(RetailerInventory.retailer_id == retailer_id).all()
 
     return [
         {

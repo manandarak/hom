@@ -14,6 +14,7 @@ def create_tertiary_sale(db: Session, sale_in: TertiaryOrderCreate):
         fulfilled_by_retailer_id=sale_in.fulfilled_by_retailer_id,
         product_id=sale_in.product_id,
         quantity=sale_in.quantity,
+        batch_number=sale_in.batch_number,  # <--- ADD THIS LINE
         assigned_so_id=sale_in.assigned_so_id,
         request_date=date.today(),
         status="Pending"

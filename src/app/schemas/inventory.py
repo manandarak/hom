@@ -5,7 +5,7 @@ from typing import Optional
 class StockUpdate(BaseModel):
     product_id: int
     quantity_change: int
-    transaction_type: str  # Production, Sale, Return, Adjustment
+    transaction_type: str
     reference_document: str
 
 class StockLedgerRead(BaseModel):
@@ -15,6 +15,9 @@ class StockLedgerRead(BaseModel):
     entity_id: int
     product_id: int
     quantity_change: int
+    batch_number: str
+    transaction_type: str
+    reference_document: str
     closing_balance: int
     model_config = ConfigDict(from_attributes=True)
 

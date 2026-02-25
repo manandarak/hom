@@ -27,6 +27,7 @@ class TertiaryOrderCreate(BaseModel):
     fulfilled_by_retailer_id: int
     product_id: int
     quantity: int
+    batch_number : str
     assigned_so_id: int
 
 class DispatchPayload(BaseModel):
@@ -86,3 +87,12 @@ class SecondaryOrderRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SecondaryDispatchCreate(BaseModel):
+    transport_name : str
+    vehicle_number : str
+    lr_number : str
+    estimated_arrival_date: date
+    driver_phone: str | None = None
+

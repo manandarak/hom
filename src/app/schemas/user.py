@@ -4,7 +4,8 @@ from typing import Optional, List
 class UserBase(BaseModel):
     username: str
     is_active: bool = True
-    role_id: int
+    # Safely allow nulls from the database
+    role_id: Optional[int] = None
     assigned_zone_id: Optional[int] = None
     assigned_region_id: Optional[int] = None
     assigned_area_id: Optional[int] = None
@@ -12,17 +13,11 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    role_id: int
-    assigned_zone_id: Optional[int] = None
-    assigned_region_id: Optional[int] = None
-    assigned_area_id: Optional[int] = None
-    assigned_territory_id: Optional[int] = None
+    role_id: int  # Required when explicitly creating a NEW user
 
 class UserRead(UserBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
-    role_id: int
-    assigned_territory_id: Optional[int]
 
 class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
@@ -32,14 +27,15 @@ class UserUpdate(BaseModel):
     assigned_area_id: Optional[int] = None
     assigned_territory_id: Optional[int] = None
 
-
 class PermissionRead(BaseModel):
     id: int
     name: str
+    description: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 class RoleBase(BaseModel):
     name: str
+    description: Optional[str] = None
 
 class RoleCreate(RoleBase):
     pass

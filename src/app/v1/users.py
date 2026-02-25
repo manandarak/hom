@@ -1,17 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-
-from src.app.models.user import User
-from src.app.schemas.user import UserCreate, UserRead, UserUpdate
-from src.app.crud.user import create_user
-from src.app.core.security import check_permissions
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from src.app.core.database import get_db
 from src.app.core.security import check_permissions, get_current_user
 
-from src.app.models.user import User, Role
+from src.app.models.user import User, Role, Permission
 from src.app.schemas.user import (
     UserCreate, UserRead, UserUpdate,
     RoleCreate, RoleRead, RolePermissionUpdate, PermissionRead
@@ -19,30 +11,30 @@ from src.app.schemas.user import (
 from src.app.crud.user import (
     create_user, create_role, get_all_permissions, update_role_permissions
 )
-from src.app.core.security import check_permissions
-from src.app.models.user import Permission
 
 router = APIRouter()
-
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def add_new_user(
         user_in: UserCreate,
         db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_users"))
 ):
     return create_user(db, user_in)
 
-
 @router.get("/", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db)):
+def list_users(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
     return db.query(User).all()
-
 
 @router.patch("/{user_id}", response_model=UserRead)
 def edit_user(
         user_id: int,
         user_in: UserUpdate,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_users"))
 ):
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
@@ -56,9 +48,12 @@ def edit_user(
     db.refresh(db_user)
     return db_user
 
-
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deactivate_user(user_id: int, db: Session = Depends(get_db)):
+def deactivate_user(
+        user_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_users"))
+):
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -78,14 +73,14 @@ def add_new_role(
 @router.get("/roles", response_model=list[RoleRead])
 def list_roles_and_permissions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("manage_roles"))
+    current_user: User = Depends(get_current_user)
 ):
     return db.query(Role).all()
 
 @router.get("/permissions", response_model=list[PermissionRead])
 def list_available_permissions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("manage_roles"))
+    current_user: User = Depends(get_current_user)
 ):
     return get_all_permissions(db)
 
@@ -122,7 +117,9 @@ def seed_default_permissions(db: Session = Depends(get_db)):
         {"name": "view_all_orders", "description": "Can view ALL company orders (Admin/ZSM level)"},
         {"name": "create_primary_order", "description": "Can place primary factory orders"},
         {"name": "create_secondary_order", "description": "Can place secondary orders to retailers"},
+        {"name": "create_tertiary_order", "description": "Can register consumers and place tertiary orders"},
         {"name": "manage_users", "description": "Can create and edit user accounts"},
+        {"name": "manage_roles", "description": "Can create and edit roles and permissions"}
     ]
 
     added = 0
