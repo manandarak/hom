@@ -10,8 +10,8 @@ import src.app.models.sales_primary
 import src.app.models.sales_secondary
 import src.app.models.sales_tertiary
 import src.app.models.finance
-import src.app.models.logistics  # <-- Added!
-import src.app.models.pricing  # <-- Added!
+import src.app.models.logistics
+import src.app.models.pricing
 from src.app.models.user import User, Role
 
 

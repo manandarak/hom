@@ -85,8 +85,6 @@ def get_my_pending_requests(
         current_user: User = Depends(get_current_user)
 ):
     scope_filter = PermissionService.get_user_data_scope(current_user)
-
-    # 2. Pass the filter to the database query
     return get_scoped_pending_orders(db, scope_filter)
 
 
@@ -145,7 +143,6 @@ def update_tertiary_order(order_id: int, update_in: TertiaryOrderCreate, db: Ses
             status_code=400,
             detail=f"Cannot update order in '{order.status}' status."
         )
-
 
     order.end_consumer_id = update_in.end_consumer_id
     order.fulfilled_by_retailer_id = update_in.fulfilled_by_retailer_id

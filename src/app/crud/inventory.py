@@ -10,7 +10,7 @@ def get_distributor_stock(db:Session, distributor_id:int, product_id:int):
 def create_ledger_entry(db:Session, ledger_data: dict):
     db_entry = StockLedger(**ledger_data)
     db.add(db_entry)
-    db.flush()  # Flush to get ID without committing the whole transaction
+    db.flush()
     return db_entry
 
 

@@ -4,7 +4,6 @@ from src.app.schemas.orders import PrimaryOrderCreate
 
 
 def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
-    # 1. Create Order Header
     db_order = PrimaryOrder(
         order_number=obj_in.order_number,
         type=obj_in.type,
@@ -15,13 +14,12 @@ def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
     db.add(db_order)
     db.flush()
 
-    # 2. Create Order Items
     for item in obj_in.items:
         db_item = PrimaryOrderItems(
             primary_order_id=db_order.id,
             product_id=item.product_id,
             quantity_cases=item.quantity ,
-            batch_number=item.batch_number # Mapping 'quantity' from schema to 'quantity_cases' in DB
+            batch_number=item.batch_number
         )
         db.add(db_item)
 
