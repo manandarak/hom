@@ -25,25 +25,46 @@ from src.app.crud.tertiary_sales import (
 
 router = APIRouter()
 
+
 @router.get("/")
 def get_all_tertiary_orders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch Tertiary Orders scoped dynamically based on user role and geography."""
-    scope = PermissionService.get_geo_scope(current_user)
     query = db.query(TertiaryOrder)
 
-    # If Admin or full scope, return all
-    if not scope or current_user.role.name == "Admin":
+    if not current_user.role:
+        return []
+
+    role_name = current_user.role.name
+
+    # 1. Admin gets everything
+    if role_name == "Admin":
         return query.order_by(TertiaryOrder.id.desc()).all()
 
-    # If not Admin, join Retailer to apply geographic filters
-    if "id" not in scope:
+    # 2. Partners strictly see ONLY their own firm's orders
+    if role_name == "Retailer":
+        retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not retailer: return []  # Fail-Closed
+        query = query.filter(TertiaryOrder.fulfilled_by_retailer_id == retailer.id)
+        return query.order_by(TertiaryOrder.id.desc()).all()
+
+    elif role_name in ["SuperStockist", "Distributor"]:
+        # Tertiary sales are between Retailer and Consumer.
+        # SS and Dist do not participate directly in this pipeline.
+        return []
+
+    # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
+    else:
+        scope = PermissionService.get_geo_scope(current_user)
+        if not scope or "id" in scope:
+            return []  # Fail-Closed failsafe
+
+        # Join Retailer to apply geographic filters
         query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
         for key, value in scope.items():
             if hasattr(Retailer, key) and value is not None:
                 query = query.filter(getattr(Retailer, key) == value)
 
-    return query.order_by(TertiaryOrder.id.desc()).all()
-
+        return query.order_by(TertiaryOrder.id.desc()).all()
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def record_tertiary_sale(sale_in: TertiaryOrderCreate, db: Session = Depends(get_db)):

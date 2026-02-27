@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from src.app.core.database import get_db
 from src.app.core.security import get_current_user
 from src.app.models.user import User
+from src.app.services.permission_service import PermissionService
 from src.app.models.sales_secondary import SecondaryOrder, SecondaryOrderItems
 from src.app.models.partner import Retailer, Distributor
 from src.app.models.product import ProductMaster
@@ -171,25 +172,46 @@ def get_all_secondary_orders(
     if not current_user.role:
         return []
 
-    user_permissions = [p.name for p in current_user.role.permissions] if current_user.role.permissions else []
+    role_name = current_user.role.name
 
-    if current_user.role.name == "Admin" or "view_all_orders" in user_permissions:
+    # 1. Admin gets everything
+    if role_name == "Admin":
         pass
-    elif current_user.role.name == "Distributor":
-        distributor = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
-        if distributor:
-            query = query.filter(SecondaryOrder.distributor_id == distributor.id)
-    elif current_user.role.name == "Retailer":
-        retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
-        if retailer:
-            query = query.filter(SecondaryOrder.retailer_id == retailer.id)
-    else:
-        query = query.join(Retailer, SecondaryOrder.retailer_id == Retailer.id)
-        if current_user.assigned_territory_id:
-            query = query.filter(Retailer.territory_id == current_user.assigned_territory_id)
 
+        # 2. Partners strictly see their own entity's orders (Fail-Closed)
+    elif role_name == "Distributor":
+        distributor = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+        if not distributor:
+            return []  # CRITICAL FIX: Return empty if profile is missing, do not let it fall through
+        query = query.filter(SecondaryOrder.distributor_id == distributor.id)
+
+    elif role_name == "Retailer":
+        retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not retailer:
+            return []  # CRITICAL FIX: Return empty
+        query = query.filter(SecondaryOrder.retailer_id == retailer.id)
+
+    elif role_name == "SuperStockist":
+        return []  # SuperStockists generally don't participate in secondary sales directly
+
+    # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
+    else:
+        scope = PermissionService.get_geo_scope(current_user)
+
+        # If the permission service returns the failsafe ID, deny access
+        if not scope or "id" in scope:
+            return []
+
+        # Join with Retailer to apply geographic filters (Zone, Region, Area, Territory)
+        query = query.join(Retailer, SecondaryOrder.retailer_id == Retailer.id)
+        for key, value in scope.items():
+            if hasattr(Retailer, key) and value is not None:
+                query = query.filter(getattr(Retailer, key) == value)
+
+    # Execute final secured query
     orders = query.order_by(SecondaryOrder.id.desc()).all()
 
+    # Format result
     result = []
     for o in orders:
         items_data = [{"product_id": i.product_id, "quantity_units": i.quantity_units, "batch_number": i.batch_number}
