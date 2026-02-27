@@ -2,6 +2,12 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
 
+# --- NEW IMPORTS FOR SECURITY ---
+from src.app.core.security import get_current_user
+from src.app.models.user import User
+from src.app.services.permission_service import PermissionService
+# --------------------------------
+
 from src.app.models.partner import SuperStockist, Distributor, Retailer
 from src.app.schemas.partner import (
     SuperStockistCreate, SuperStockistRead, SuperStockistUpdate,
@@ -24,8 +30,30 @@ def add_super_stockist(ss_in: SuperStockistCreate, db: Session = Depends(get_db)
 
 
 @router.get("/super-stockists", response_model=list[SuperStockistRead])
-def list_super_stockists(db: Session = Depends(get_db)):
-    return db.query(SuperStockist).all()
+def list_super_stockists(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Securely scoped Super Stockist fetch."""
+    query = db.query(SuperStockist)
+
+    if not current_user.role: return []
+    if current_user.role.name == "Admin": return query.all()
+
+    # Partners only see themselves
+    if current_user.role.name == "SuperStockist":
+        return query.filter(SuperStockist.user_id == current_user.id).all()
+    elif current_user.role.name in ["Distributor", "Retailer"]:
+        return []
+
+    # Internal Teams
+    scope = PermissionService.get_geo_scope(current_user)
+    if scope and "id" not in scope:
+        for key, value in scope.items():
+            if hasattr(SuperStockist, key) and value is not None:
+                query = query.filter(getattr(SuperStockist, key) == value)
+            else:
+                return []  # Fail-Closed if scope doesn't apply
+        return query.all()
+
+    return []
 
 
 @router.patch("/super-stockists/{ss_id}", response_model=SuperStockistRead)
@@ -61,8 +89,29 @@ def add_distributor(dist_in: DistributorCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/distributors", response_model=list[DistributorRead])
-def list_distributors(db: Session = Depends(get_db)):
-    return db.query(Distributor).all()
+def list_distributors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Securely scoped Distributor fetch."""
+    query = db.query(Distributor)
+
+    if not current_user.role: return []
+    if current_user.role.name == "Admin": return query.all()
+
+    if current_user.role.name == "Distributor":
+        return query.filter(Distributor.user_id == current_user.id).all()
+    elif current_user.role.name == "Retailer":
+        return []
+
+    # Internal Teams & Higher Partners (like SS viewing downstream)
+    scope = PermissionService.get_geo_scope(current_user)
+    if scope and "id" not in scope:
+        for key, value in scope.items():
+            if hasattr(Distributor, key) and value is not None:
+                query = query.filter(getattr(Distributor, key) == value)
+            else:
+                return []  # Fail-Closed
+        return query.all()
+
+    return []
 
 
 @router.patch("/distributors/{dist_id}", response_model=DistributorRead)
@@ -98,8 +147,27 @@ def add_retailer(ret_in: RetailerCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/retailers", response_model=list[RetailerRead])
-def list_retailers(db: Session = Depends(get_db)):
-    return db.query(Retailer).all()
+def list_retailers(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Securely scoped Retailer fetch."""
+    query = db.query(Retailer)
+
+    if not current_user.role: return []
+    if current_user.role.name == "Admin": return query.all()
+
+    if current_user.role.name == "Retailer":
+        return query.filter(Retailer.user_id == current_user.id).all()
+
+    # Internal Teams & Higher Partners (SS, Dist) viewing downstream
+    scope = PermissionService.get_geo_scope(current_user)
+    if scope and "id" not in scope:
+        for key, value in scope.items():
+            if hasattr(Retailer, key) and value is not None:
+                query = query.filter(getattr(Retailer, key) == value)
+            else:
+                return []  # Fail-Closed
+        return query.all()
+
+    return []
 
 
 @router.patch("/retailers/{ret_id}", response_model=RetailerRead)
