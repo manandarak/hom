@@ -8,6 +8,7 @@ from src.app.models.sales_primary import PrimaryOrder, PrimaryOrderItems
 from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead, DispatchPayload
 from src.app.crud.primary_sales import create_primary_order
 from src.app.services.order_service import OrderService
+from src.app.services.permission_service import PermissionService
 
 router = APIRouter()
 
@@ -16,31 +17,42 @@ def get_all_primary_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Fetch primary orders filtered dynamically based on user role."""
+    """Fetch primary orders filtered dynamically based on user role and hierarchy."""
     query = db.query(PrimaryOrder)
 
     if not current_user.role:
         return []
 
-    user_permissions = [p.name for p in current_user.role.permissions] if current_user.role.permissions else []
+    role_name = current_user.role.name
+    scope = PermissionService.get_geo_scope(current_user)
 
-    if current_user.role.name == "Admin" or "view_all_orders" in user_permissions:
+    # 1. Admin gets everything
+    if role_name == "Admin":
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    if current_user.role.name == "SuperStockist":
+    # 2. Partners strictly see their own entity's orders
+    if role_name == "SuperStockist":
         ss = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
         if ss:
             query = query.filter((PrimaryOrder.to_entity_id == ss.id) | (PrimaryOrder.from_entity_id == ss.id))
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    elif current_user.role.name == "Distributor":
+    elif role_name == "Distributor":
         distributor = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if distributor:
             query = query.filter(PrimaryOrder.to_entity_id == distributor.id)
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    elif current_user.role.name == "Retailer":
-        return []
+    elif role_name == "Retailer":
+        return [] # Retailers don't deal with primary sales
+
+    # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
+    if scope and "id" not in scope:
+        # Primary Orders go to SuperStockists, so we filter based on the SS geography
+        query = query.join(SuperStockist, PrimaryOrder.to_entity_id == SuperStockist.id)
+        for key, value in scope.items():
+            if hasattr(SuperStockist, key) and value is not None:
+                query = query.filter(getattr(SuperStockist, key) == value)
 
     return query.order_by(PrimaryOrder.id.desc()).all()
 

@@ -1,3 +1,4 @@
+from cryptography.hazmat.primitives.twofactor.hotp import HOTPHashTypes
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from datetime import date
@@ -8,6 +9,8 @@ from src.app.services.pricing_service import PricingService
 from src.app.services.finance_service import FinanceService
 from src.app.models.logistics import Shipment
 from src.app.schemas.orders import DispatchPayload
+from src.app.models.sales_tertiary import TertiaryOrder
+from src.app.models.partner import Retailer
 import datetime
 from datetime import date, datetime
 from decimal import Decimal
@@ -187,3 +190,43 @@ class OrderService:
             return "SuperStockist", "Distributor"
         else:
             raise HTTPException(status_code=400, detail=f"Invalid order type: {order_type}")
+
+    @staticmethod
+    def approve_territory_order(db: Session, order_id: int, current_user):
+        if not current_user.role or current_user.role != "SO":
+            raise HTTPException(status_code=403, detail="Only Sales Officers can approve Tertiary Orders.")
+        order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Tertiary Order not found")
+        if order.status == "Approved_by_SO":
+            raise HTTPException(status_code=400, detail="Order is already approved")
+        retailer = db.query(Retailer).filter(Retailer.id == order.fulfilled_by_retailer_id).first()
+        if not retailer:
+            raise HTTPException(status_code=404, detail="Retailer fulfilling this order not found.")
+
+        if retailer.territory_id != current_user.assigned_territory_id:
+            raise HTTPException(
+                status_code = 403,
+                detail = "This order belongs to a Retailer outside your assigned territory."
+            )
+        try:
+            StockService.update_stock(
+                db=db,
+                entity_type="Retailer",
+                entity_id=order.fulfilled_by_retailer_id,
+                product_id=order.product_id,
+                qty_change=-order.quantity,
+                ref_doc=f"TERT-{order.id}",
+                batch_number=order.batch_number,
+                trans_type="RETAIL_SALE"
+            )
+
+            order.status = "Approved_by_SO"
+            db.commit()
+            db.refresh(order)
+
+            return {"message": "Order approved successfully", "order_id": order.id, "status": order.status}
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
