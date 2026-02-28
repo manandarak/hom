@@ -1,24 +1,59 @@
 from sqlalchemy.orm import Session
-from src.app.models.sales_tertiary import TertiaryOrder
+from src.app.models.sales_tertiary import TertiaryOrder, EndConsumer
 from src.app.schemas.orders import TertiaryOrderCreate
+from src.app.schemas.partner import EndConsumerCreate, EndConsumerUpdate
 from datetime import date
 from src.app.models.user import User
-from src.app.models.sales_tertiary import EndConsumer
-from src.app.schemas.partner import EndConsumerCreate, EndConsumerUpdate
+from src.app.models.partner import Retailer
+from src.app.models.geography import Territory, Area, Region, State
 
 
 def create_tertiary_sale(db: Session, sale_in: TertiaryOrderCreate):
-    """Creates a new tertiary sale record (Pending status by default)"""
+    """Creates a new tertiary sale record and stamps the full geography."""
+
+    # 1. Fetch the Retailer fulfilling the order
+    retailer = db.query(Retailer).filter(Retailer.id == sale_in.fulfilled_by_retailer_id).first()
+
+    # 2. Walk up the Geographic Chain
+    territory_id = retailer.territory_id if retailer else None
+    area_id = None
+    region_id = None
+    state_id = None
+    zone_id = None
+
+    if territory_id:
+        territory = db.query(Territory).filter(Territory.id == territory_id).first()
+        if territory:
+            area_id = territory.area_id
+            area = db.query(Area).filter(Area.id == area_id).first()
+            if area:
+                region_id = area.region_id
+                region = db.query(Region).filter(Region.id == region_id).first()
+                if region:
+                    state_id = region.state_id
+                    state = db.query(State).filter(State.id == state_id).first()
+                    if state:
+                        zone_id = state.zone_id
+
+    # 3. Create and Stamp the Order
     db_order = TertiaryOrder(
         end_consumer_id=sale_in.end_consumer_id,
         fulfilled_by_retailer_id=sale_in.fulfilled_by_retailer_id,
         product_id=sale_in.product_id,
         quantity=sale_in.quantity,
-        batch_number=sale_in.batch_number,  # <--- ADD THIS LINE
+        batch_number=sale_in.batch_number,
         assigned_so_id=sale_in.assigned_so_id,
         request_date=date.today(),
-        status="Pending"
+        status="Pending",
+
+        # --- THE GEOGRAPHIC STAMP ---
+        zone_id=zone_id,
+        state_id=state_id,
+        region_id=region_id,
+        area_id=area_id,
+        territory_id=territory_id
     )
+
     db.add(db_order)
     db.commit()
     db.refresh(db_order)

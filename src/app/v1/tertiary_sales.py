@@ -49,7 +49,6 @@ def get_all_tertiary_orders(db: Session = Depends(get_db), current_user: User = 
 
     elif role_name in ["SuperStockist", "Distributor"]:
         # Tertiary sales are between Retailer and Consumer.
-        # SS and Dist do not participate directly in this pipeline.
         return []
 
     # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
@@ -58,11 +57,8 @@ def get_all_tertiary_orders(db: Session = Depends(get_db), current_user: User = 
         if not scope or "id" in scope:
             return []  # Fail-Closed failsafe
 
-        # Join Retailer to apply geographic filters
-        query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
-        for key, value in scope.items():
-            if hasattr(Retailer, key) and value is not None:
-                query = query.filter(getattr(Retailer, key) == value)
+        # THE FAT TABLE FIX: No joins needed. Instant high-speed filtering directly on TertiaryOrder!
+        query = query.filter_by(**scope)
 
         return query.order_by(TertiaryOrder.id.desc()).all()
 

@@ -48,11 +48,8 @@ def get_all_primary_orders(
 
     # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     if scope and "id" not in scope:
-        # Primary Orders go to SuperStockists, so we filter based on the SS geography
-        query = query.join(SuperStockist, PrimaryOrder.to_entity_id == SuperStockist.id)
-        for key, value in scope.items():
-            if hasattr(SuperStockist, key) and value is not None:
-                query = query.filter(getattr(SuperStockist, key) == value)
+        # THE FAT TABLE FIX: No more joins! The order has the geographic IDs stamped on it.
+        query = query.filter_by(**scope)
 
     return query.order_by(PrimaryOrder.id.desc()).all()
 

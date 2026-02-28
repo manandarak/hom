@@ -1,15 +1,27 @@
 from sqlalchemy.orm import Session
 from src.app.models.sales_primary import PrimaryOrder, PrimaryOrderItems
 from src.app.schemas.orders import PrimaryOrderCreate
+from src.app.models.partner import SuperStockist
 
 
 def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
+    # 1. Fetch the target Super Stockist
+    ss = db.query(SuperStockist).filter(SuperStockist.id == obj_in.to_entity_id).first()
+
+    # 2. Stamp the Order
     db_order = PrimaryOrder(
         order_number=obj_in.order_number,
         type=obj_in.type,
         from_entity_id=obj_in.from_entity_id,
         to_entity_id=obj_in.to_entity_id,
-        status="Pending"
+        status="Pending",
+
+        # --- THE GEOGRAPHIC STAMP ---
+        zone_id=ss.zone_id if ss else None,
+        state_id=None,
+        region_id=None,
+        area_id=None,
+        territory_id=None
     )
     db.add(db_order)
     db.flush()
@@ -18,7 +30,7 @@ def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
         db_item = PrimaryOrderItems(
             primary_order_id=db_order.id,
             product_id=item.product_id,
-            quantity_cases=item.quantity ,
+            quantity_cases=item.quantity,
             batch_number=item.batch_number
         )
         db.add(db_item)

@@ -1,12 +1,53 @@
 from sqlalchemy.orm import Session
 from src.app.models.sales_secondary import SecondaryOrder, SecondaryOrderItems
+from src.app.models.partner import Distributor, Retailer
+from src.app.models.geography import Territory, Area, Region, State
+
 
 def create_secondary_order(db: Session, retailer_id: int, distributor_id: int, items_in: list, total_amount: float):
+    # 1. Fetch the partners
+    distributor = db.query(Distributor).filter(Distributor.id == distributor_id).first()
+    retailer = db.query(Retailer).filter(Retailer.id == retailer_id).first()
+
+    # 2. Walk up the Geographic Chain based on the Retailer's Territory
+    territory_id = retailer.territory_id if retailer else None
+    area_id = None
+    region_id = None
+    state_id = distributor.state_id if distributor else None
+    zone_id = None
+
+    if territory_id:
+        territory = db.query(Territory).filter(Territory.id == territory_id).first()
+        if territory:
+            area_id = territory.area_id
+            area = db.query(Area).filter(Area.id == area_id).first()
+            if area:
+                region_id = area.region_id
+                region = db.query(Region).filter(Region.id == region_id).first()
+                if region:
+                    state_id = region.state_id
+                    state = db.query(State).filter(State.id == state_id).first()
+                    if state:
+                        zone_id = state.zone_id
+    elif state_id:
+        # Fallback just in case retailer has no territory, but distributor has a state
+        state = db.query(State).filter(State.id == state_id).first()
+        if state:
+            zone_id = state.zone_id
+
+    # 3. Create and Stamp the Order
     db_order = SecondaryOrder(
         retailer_id=retailer_id,
         distributor_id=distributor_id,
-        total_amount=total_amount, # Added this line
-        status="Pending"
+        total_amount=total_amount,
+        status="Pending",
+
+        # --- THE GEOGRAPHIC STAMP ---
+        zone_id=zone_id,
+        state_id=state_id,
+        region_id=region_id,
+        area_id=area_id,
+        territory_id=territory_id
     )
     db.add(db_order)
     db.flush()
@@ -16,7 +57,8 @@ def create_secondary_order(db: Session, retailer_id: int, distributor_id: int, i
             secondary_order_id=db_order.id,
             product_id=item['product_id'],
             quantity_units=item['quantity'],
-            batch_number=item['batch_number'] # (assuming you also want to save batch_number here)
+            batch_number=item['batch_number']
         )
         db.add(db_item)
+
     return db_order

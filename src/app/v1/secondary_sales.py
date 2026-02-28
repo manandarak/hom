@@ -178,21 +178,21 @@ def get_all_secondary_orders(
     if role_name == "Admin":
         pass
 
-        # 2. Partners strictly see their own entity's orders (Fail-Closed)
+    # 2. Partners strictly see their own entity's orders (Fail-Closed)
     elif role_name == "Distributor":
         distributor = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if not distributor:
-            return []  # CRITICAL FIX: Return empty if profile is missing, do not let it fall through
+            return []
         query = query.filter(SecondaryOrder.distributor_id == distributor.id)
 
     elif role_name == "Retailer":
         retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
         if not retailer:
-            return []  # CRITICAL FIX: Return empty
+            return []
         query = query.filter(SecondaryOrder.retailer_id == retailer.id)
 
     elif role_name == "SuperStockist":
-        return []  # SuperStockists generally don't participate in secondary sales directly
+        return []
 
     # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     else:
@@ -202,11 +202,8 @@ def get_all_secondary_orders(
         if not scope or "id" in scope:
             return []
 
-        # Join with Retailer to apply geographic filters (Zone, Region, Area, Territory)
-        query = query.join(Retailer, SecondaryOrder.retailer_id == Retailer.id)
-        for key, value in scope.items():
-            if hasattr(Retailer, key) and value is not None:
-                query = query.filter(getattr(Retailer, key) == value)
+        # THE FAT TABLE FIX: We delete the Retailer join and filter the SecondaryOrder table directly.
+        query = query.filter_by(**scope)
 
     # Execute final secured query
     orders = query.order_by(SecondaryOrder.id.desc()).all()
