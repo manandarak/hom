@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     assigned_region_id: Optional[int] = None
     assigned_area_id: Optional[int] = None
     assigned_territory_id: Optional[int] = None
+    assigned_state_id: Optional[int] = None
 
 class UserCreate(UserBase):
     password: str
@@ -26,6 +27,7 @@ class UserUpdate(BaseModel):
     assigned_region_id: Optional[int] = None
     assigned_area_id: Optional[int] = None
     assigned_territory_id: Optional[int] = None
+    assigned_state_id : Optional[int] = None
 
 class PermissionRead(BaseModel):
     id: int

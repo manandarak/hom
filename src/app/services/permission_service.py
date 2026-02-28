@@ -28,7 +28,7 @@ class PermissionService:
             return {"zone_id": user.assigned_zone_id}
 
         elif role == "Distributor":
-            return {"region_id": user.assigned_state_id}
+            return {"state_id": user.assigned_state_id}
 
         elif role == "Retailer":
             return {"territory_id": user.assigned_territory_id}
