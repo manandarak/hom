@@ -9,6 +9,8 @@ from src.app.services.permission_service import PermissionService
 from src.app.schemas.inventory import ProductionLogCreate, StockLedgerRead, StockUpdate
 from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory, RetailerInventory
 from src.app.services.stock_service import StockService
+from src.app.models.inventory import FactoryMaster
+from src.app.schemas.inventory import FactoryCreate
 
 router = APIRouter()
 
@@ -166,7 +168,30 @@ def get_distributor_stock(distributor_id: int, db: Session = Depends(get_db)):
         for s in stock
     ]
 
-# --- NEW ENDPOINT TO FIX 404 ERROR ---
+
+@router.post("/factories", status_code=201)
+def create_factory(factory_in: FactoryCreate, db: Session = Depends(get_db)):
+    """Registers a new manufacturing plant in the database."""
+
+    # Note: Your FactoryMaster model has a 'batch_number' column that is not nullable.
+    # That usually belongs on the product, not the building, but we'll pass a dummy string to bypass the error!
+    new_factory = FactoryMaster(
+        name=factory_in.name,
+        location="India",
+        batch_number="N/A"
+    )
+
+    db.add(new_factory)
+    db.commit()
+    db.refresh(new_factory)
+
+    return {"id": new_factory.id, "name": new_factory.name}
+
+
+@router.get("/factories")
+def get_all_factories(db: Session = Depends(get_db)):
+    """Fetches all registered plants."""
+    return db.query(FactoryMaster).all()
 @router.get("/retailer/{retailer_id}")
 def get_retailer_stock(retailer_id: int, db: Session = Depends(get_db)):
     """Fetches all stock and batches sitting with a specific Retailer"""

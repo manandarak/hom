@@ -2,6 +2,10 @@ from pydantic import BaseModel, ConfigDict
 from datetime import datetime, date
 from typing import Optional
 
+
+class FactoryCreate(BaseModel):
+    name: str
+    
 class StockUpdate(BaseModel):
     product_id: int
     quantity_change: int

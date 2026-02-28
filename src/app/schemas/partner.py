@@ -10,6 +10,7 @@ class SuperStockistBase(BaseModel):
     contact_person: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = True
+    user_id: Optional[int] = None
 
 class SuperStockistCreate(SuperStockistBase):
     pass
@@ -29,6 +30,7 @@ class DistributorBase(BaseModel):
     gstin: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = True
+    user_id: Optional[int] = None
 
 class DistributorCreate(DistributorBase):
     pass
@@ -91,6 +93,7 @@ class SuperStockistUpdate(BaseModel):
     gstin: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = None
+    user_id: Optional[int] = None
 
 class DistributorUpdate(BaseModel):
     state_id: Optional[int] = None
@@ -102,6 +105,7 @@ class DistributorUpdate(BaseModel):
     gstin: Optional[str] = None
     user_id: Optional[int] = None
     is_active: Optional[bool] = None
+    user_id: Optional[int] = None
 
 class RetailerUpdate(BaseModel):
     territory_id: Optional[int] = None
