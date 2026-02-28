@@ -25,11 +25,13 @@ class User(Base):
     assigned_region_id = Column(Integer, ForeignKey("region.id"), nullable=True)
     assigned_area_id = Column(Integer, ForeignKey("area.id"), nullable=True)
     assigned_territory_id = Column(Integer, ForeignKey("territory.id"), nullable=True)
+    assigned_stated_id = Column(Integer, ForeignKey("state.id"), nullable=True)
 
     zone = relationship("Zone")
     region = relationship("Region")
     area = relationship("Area")
     territory = relationship("Territory")
+    state = relationship("State")
 
     role = relationship("Role")
 

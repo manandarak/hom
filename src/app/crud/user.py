@@ -30,7 +30,8 @@ def create_user(db: Session, user_in: UserCreate):
         assigned_zone_id=user_in.assigned_zone_id,
         assigned_region_id=user_in.assigned_region_id,
         assigned_area_id=user_in.assigned_area_id,
-        assigned_territory_id=user_in.assigned_territory_id
+        assigned_territory_id=user_in.assigned_territory_id,
+        assigned_state_id = user_in.assigned_state_id
     )
 
     db.add(db_user)
@@ -68,20 +69,19 @@ def update_role_permissions(db: Session, role_id: int, permission_ids: list[int]
     if not role:
         return None
 
-    # Fetch the actual permission objects requested
     permissions = db.query(Permission).filter(Permission.id.in_(permission_ids)).all()
 
-    # --- GUARDRAIL: Restrict geographic roles to specific permissions only ---
-    restricted_roles = ["ZSM", "RSM", "ASM", "SO"]
+    allowed_admin_roles = ["Admin"]
     admin_only_permissions = ["manage_users", "manage_roles", "manage_system"]
 
-    if role.name in restricted_roles:
+    if role.name not in allowed_admin_roles:
         for p in permissions:
             if p.name in admin_only_permissions:
                 raise ValueError(
-                    f"Security Violation: Cannot assign global permission '{p.name}' to restricted field role '{role.name}'.")
+                    f"Security Violation: Role '{role.name}' is not authorized for global permission '{p.name}'."
+                )
 
-    # Update associations (SQLAlchemy handles the deletion and insertion in the mapping table)
+    # Update associations
     role.permissions = permissions
     db.commit()
     db.refresh(role)

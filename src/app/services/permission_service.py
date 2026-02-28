@@ -9,15 +9,12 @@ class PermissionService:
         or are joined with the Geography tables during the query.
         """
         if not user.role:
-            return {"id": -1}  # Failsafe if user has no role
+            return {"id": -1}
 
         role = user.role.name
-
-        # 1. Admin - Full Access
         if role == "Admin":
             return {}
 
-        # 2. Internal Team Hierarchy
         elif role == "ZSM":
             return {"zone_id": user.assigned_zone_id}
         elif role == "RSM":
@@ -27,18 +24,12 @@ class PermissionService:
         elif role == "SO":
             return {"territory_id": user.assigned_territory_id}
 
-        # 3. Partners - Geographic Scoping
         elif role == "SuperStockist":
-            # SS mapped to Zone
             return {"zone_id": user.assigned_zone_id}
 
         elif role == "Distributor":
-            # Distributor mapped to State (Assuming Region = State in your DB schema)
-            return {"region_id": user.assigned_region_id}
+            return {"region_id": user.assigned_state_id}
 
         elif role == "Retailer":
-            # Retailer mapped to Territory
             return {"territory_id": user.assigned_territory_id}
-
-        # Failsafe for unknown roles
         return {"id": -1}
