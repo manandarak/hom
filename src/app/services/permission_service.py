@@ -1,5 +1,3 @@
-# src/app/services/permission_service.py
-
 class PermissionService:
     @staticmethod
     def get_geo_scope(user):
@@ -12,24 +10,33 @@ class PermissionService:
             return {"id": -1}
 
         role = user.role.name
+
         if role == "Admin":
             return {}
 
-        elif role == "ZSM":
+        elif role == "ZSM" or role == "SuperStockist":
+            if not user.assigned_zone_id:
+                return {"id": -1}
             return {"zone_id": user.assigned_zone_id}
-        elif role == "RSM":
-            return {"region_id": user.assigned_region_id}
-        elif role == "ASM":
-            return {"area_id": user.assigned_area_id}
-        elif role == "SO":
-            return {"territory_id": user.assigned_territory_id}
 
-        elif role == "SuperStockist":
-            return {"zone_id": user.assigned_zone_id}
+        elif role == "RSM":
+            if not user.assigned_region_id:
+                return {"id": -1}
+            return {"region_id": user.assigned_region_id}
+
+        elif role == "ASM":
+            if not user.assigned_area_id:
+                return {"id": -1}
+            return {"area_id": user.assigned_area_id}
+
+        elif role == "SO" or role == "Retailer":
+            if not user.assigned_territory_id:
+                return {"id": -1}
+            return {"territory_id": user.assigned_territory_id}
 
         elif role == "Distributor":
+            if not user.assigned_state_id:
+                return {"id": -1}
             return {"state_id": user.assigned_state_id}
 
-        elif role == "Retailer":
-            return {"territory_id": user.assigned_territory_id}
         return {"id": -1}
