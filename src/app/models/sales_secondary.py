@@ -16,6 +16,11 @@ class SecondaryOrder(Base):
 
     items = relationship("SecondaryOrderItems", back_populates="order")
 
+    zone_id = Column(Integer, index=True, nullable=True)
+    region_id = Column(Integer, index=True, nullable=True)
+    state_id = Column(Integer, index=True, nullable=True)
+    area_id = Column(Integer, index=True, nullable=True)
+    territory_id = Column(Integer, index=True, nullable=True)
 
 class SecondaryOrderItems(Base):
     __tablename__ = "secondary_order_items"

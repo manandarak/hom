@@ -21,3 +21,9 @@ class FinancialLedger(Base):
     credit_amount = Column(DECIMAL(12, 2), default=0.00)  # Amount paid off
     closing_balance = Column(DECIMAL(12, 2), nullable=False)
     remarks = Column(String(255), nullable=True)
+
+    zone_id = Column(Integer, index=True, nullable=True)
+    region_id = Column(Integer, index=True, nullable=True)
+    state_id = Column(Integer, index=True, nullable=True)
+    area_id = Column(Integer, index=True, nullable=True)
+    territory_id = Column(Integer, index=True, nullable=True)

@@ -18,6 +18,12 @@ class PrimaryOrder(Base):
     invoice = relationship("PrimaryInvoice", back_populates="order", uselist=False)
     shipment = relationship("Shipment", back_populates="order", uselist=False)
 
+    zone_id = Column(Integer, index=True, nullable=True)
+    region_id = Column(Integer, index=True, nullable=True)
+    state_id = Column(Integer, index=True, nullable=True)
+    area_id = Column(Integer, index=True, nullable=True)
+    territory_id = Column(Integer, index=True, nullable=True)
+
 
 class PrimaryOrderItems(Base):
     __tablename__ = "primary_order_items"

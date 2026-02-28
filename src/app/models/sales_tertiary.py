@@ -13,6 +13,7 @@ class EndConsumer(Base):
     contact_person = Column(String(50), nullable=True)
     address = Column(String(255), nullable=True)
 
+
 class TertiaryOrder(Base):
     __tablename__ = "tertiary_order"
     id = Column(BigInteger, primary_key=True, index=True)
@@ -21,15 +22,13 @@ class TertiaryOrder(Base):
     assigned_so_id = Column(BigInteger, ForeignKey("users.id"))
     fulfilled_by_retailer_id = Column(Integer, ForeignKey("retailer.id"))
     batch_number = Column(String(50), nullable=False)
-    # --- ADD THESE TWO LINES ---
     product_id = Column(Integer, ForeignKey("product_master.id"))
     quantity = Column(Integer)
-    # ---------------------------
-    # contact_person = Column(String(50), nullable=True)
-    # address = Column(String(255), nullable=True)
-
     status = Column(String(50))
-    # order = relationship("SecondaryOrder", back_populates="items")
-
+    zone_id = Column(Integer, index=True, nullable=True)
+    region_id = Column(Integer, index=True, nullable=True)
+    state_id = Column(Integer, index=True, nullable=True)
+    area_id = Column(Integer, index=True, nullable=True)
+    territory_id = Column(Integer, index=True, nullable=True)
 
 
