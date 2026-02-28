@@ -78,12 +78,10 @@ def update_tertiary_status(db: Session, order_id: int, status: str):
 def get_scoped_pending_orders(db: Session, scope_filter: dict):
     query = db.query(TertiaryOrder).filter(TertiaryOrder.status == "Pending")
 
-    if not scope_filter:
-        return query.all()
+    if not scope_filter or "id" in scope_filter:
+        return []
 
-    user_filters = [getattr(User, key) == value for key, value in scope_filter.items()]
-
-    return query.join(User, TertiaryOrder.assigned_so_id == User.id).filter(*user_filters).all()
+    return query.filter_by(**scope_filter).all()
 
 
 def create_end_consumer(db: Session, consumer_in: EndConsumerCreate):

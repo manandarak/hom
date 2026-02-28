@@ -15,6 +15,7 @@ from src.app.services.finance_service import FinanceService
 from src.app.services.tax_service import TaxService
 from src.app.schemas.orders import SecondaryDispatchCreate
 from src.app.schemas.orders import SecondaryOrderCreate, DispatchPayload
+from src.app.models.geography import Territory, Area, Region, State
 
 router = APIRouter()
 
@@ -27,19 +28,11 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
         if not retailer:
             raise HTTPException(status_code=404, detail="Retailer not found.")
 
-        distributor = db.query(Distributor).filter(Distributor.id == sale_in.distributor_id,
-                                                   Distributor.is_active == True).first()
+        distributor = db.query(Distributor).filter(Distributor.id == sale_in.distributor_id, Distributor.is_active == True).first()
         if not distributor:
             raise HTTPException(status_code=404, detail="Distributor not found.")
 
-        if retailer.linked_distributor_id and retailer.linked_distributor_id != distributor.id:
-            raise HTTPException(status_code=400, detail="Retailer is explicitly linked to a different Distributor.")
-
-        retailer_state_id = TaxService.get_retailer_state_id(db, retailer.territory_id)
-        if distributor.state_id != retailer_state_id:
-            raise HTTPException(status_code=400,
-                                detail="Geography mismatch. Distributor and Retailer must be in the same State.")
-
+        # ... (Keep your existing GST mismatch and calculation logic here) ...
         total_invoice_amount = Decimal("0.00")
         for item in sale_in.items:
             product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
@@ -48,12 +41,42 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
                                                    distributor.state_id, retailer_state_id)
             total_invoice_amount += tax_details["final_amount"]
 
+        # --- NEW: WALK UP THE GEOGRAPHIC CHAIN ---
+        territory_id = retailer.territory_id
+        area_id = None
+        region_id = None
+        state_id = distributor.state_id
+        zone_id = None
+
+        if territory_id:
+            territory = db.query(Territory).filter(Territory.id == territory_id).first()
+            if territory:
+                area_id = territory.area_id
+                area = db.query(Area).filter(Area.id == area_id).first()
+                if area:
+                    region_id = area.region_id
+                    region = db.query(Region).filter(Region.id == region_id).first()
+                    if region:
+                        # State is already known from Distributor, but we can verify Zone
+                        state = db.query(State).filter(State.id == state_id).first()
+                        if state:
+                            zone_id = state.zone_id
+
+        # --- END NEW ---
+
+        # Now include the stamps when creating the order!
         db_order = SecondaryOrder(
             distributor_id=sale_in.distributor_id,
             retailer_id=sale_in.retailer_id,
             total_amount=total_invoice_amount,
             status="PENDING",
-            order_date=datetime.now().date()
+            order_date=datetime.now().date(),
+            # THE FAT STAMPS:
+            zone_id=zone_id,
+            state_id=state_id,
+            region_id=region_id,
+            area_id=area_id,
+            territory_id=territory_id
         )
         db.add(db_order)
         db.flush()
