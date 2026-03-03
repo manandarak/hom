@@ -100,6 +100,11 @@ def place_primary_order(
         if not ss or (order_in.from_entity_id != ss.id and order_in.to_entity_id != ss.id):
             raise HTTPException(status_code=403, detail="Spoofing detected: Cannot place order for another entity.")
 
+        elif role_name == "Distributor":
+            dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+            if not dist or (order_in.from_entity_id != dist.id and order_in.to_entity_id != dist.id):
+                raise HTTPException(status_code=403, detail="Spoofing detected: Cannot place order for another entity.")
+
     try:
         db_order = create_primary_order(db, order_in)
         db.commit()

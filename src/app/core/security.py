@@ -59,10 +59,11 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
-    if not user.is_active:
+    if user is None or not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account has been deactivated or suspended."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is inactive or suspended.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

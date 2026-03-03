@@ -19,6 +19,13 @@ def receive_payment(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_payments"))
 ):
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    if "manage_roles" not in user_perms:  # If not Admin
+        model_map = {"SuperStockist": SuperStockist, "Distributor": Distributor, "Retailer": Retailer}
+        if payment_in.party_type in model_map:
+            target_model = model_map[payment_in.party_type]
+            PermissionService.verify_internal_jurisdiction(db, current_user, target_model, payment_in.party_id)
+
     """Logs a payment received from a partner and reduces their outstanding balance."""
     try:
         entry = FinanceService.record_transaction(

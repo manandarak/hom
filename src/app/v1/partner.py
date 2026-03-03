@@ -217,6 +217,8 @@ def update_retailer(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
+
+    PermissionService.verify_internal_jurisdiction(db, current_user, Retailer, ret_id)
     retailer = db.query(Retailer).filter(Retailer.id == ret_id).first()
     if not retailer:
         raise HTTPException(status_code=404, detail="Retailer not found")
