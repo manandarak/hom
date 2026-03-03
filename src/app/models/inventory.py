@@ -15,6 +15,7 @@ class StockLedger(Base):
     quantity_change = Column(Integer)
     closing_balance = Column(Integer)
 
+
 class FactoryInventory(Base):
     __tablename__ = "factory_inventory"
     id = Column(Integer, primary_key=True)
@@ -23,26 +24,32 @@ class FactoryInventory(Base):
     batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
+
 class SSInventory(Base):
     __tablename__ = "ss_inventory"
     id = Column(Integer, primary_key=True)
+    # PLURAL MAPPING
     ss_id = Column(Integer, ForeignKey("super_stockist.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
     batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
 
-class RetailerInventory(Base):
-    __tablename__ = "retailer_inventory"
-    id = Column(Integer, primary_key=True)
-    retailer_id = Column(Integer, ForeignKey("retailer.id"))
-    product_id = Column(Integer, ForeignKey("product_master.id"))
-    batch_number = Column(String(50), nullable=False)
-    current_stock_qty = Column(Integer, default=0)
 
 class DistributorInventory(Base):
     __tablename__ = "distributor_inventory"
     id = Column(Integer, primary_key=True)
+    # PLURAL MAPPING
     distributor_id = Column(Integer, ForeignKey("distributor.id"))
+    product_id = Column(Integer, ForeignKey("product_master.id"))
+    batch_number = Column(String(50), nullable=False)
+    current_stock_qty = Column(Integer, default=0)
+
+
+class RetailerInventory(Base):
+    __tablename__ = "retailer_inventory"
+    id = Column(Integer, primary_key=True)
+    # PLURAL MAPPING
+    retailer_id = Column(Integer, ForeignKey("retailer.id"))
     product_id = Column(Integer, ForeignKey("product_master.id"))
     batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)

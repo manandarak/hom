@@ -45,7 +45,7 @@ class RetailerBase(BaseModel):
     territory_id: int
     linked_distributor_id: Optional[int] = None
     shop_name: Optional[str] = None
-    shop_type: Optional[str] = None
+    # shop_type: Optional[str] = None
     contact_number: Optional[str] = None
     contact_person: Optional[str] = None
     gstin: Optional[str] = None

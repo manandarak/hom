@@ -1,11 +1,11 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DECIMAL, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DECIMAL, DateTime, BigInteger
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from src.app.core.database import Base
 
 
 class SuperStockist(Base):
-    __tablename__ = "super_stockists"
+    __tablename__ = "super_stockist"
 
     id = Column(Integer, primary_key=True, index=True)
     firm_name = Column(String(100), nullable=False)
@@ -15,7 +15,7 @@ class SuperStockist(Base):
     is_active = Column(Boolean, default=True)
 
     zone_id = Column(Integer, ForeignKey("zone.id"))
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
 
     outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
     created_at = Column(DateTime, default=func.now())
@@ -23,11 +23,11 @@ class SuperStockist(Base):
 
     zone = relationship("Zone")
     user = relationship("User")
-    distributors = relationship("Distributor", back_populates="parent_ss")
+    distributor = relationship("Distributor", back_populates="parent_ss")
 
 
 class Distributor(Base):
-    __tablename__ = "distributors"
+    __tablename__ = "distributor"
 
     id = Column(Integer, primary_key=True, index=True)
     firm_name = Column(String(100), nullable=False)
@@ -39,9 +39,9 @@ class Distributor(Base):
     zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
     state_id = Column(Integer, ForeignKey("state.id"))
 
-    parent_ss_id = Column(Integer, ForeignKey("super_stockists.id"), nullable=True)
+    parent_ss_id = Column(Integer, ForeignKey("super_stockist.id"), nullable=True)
     is_direct_party = Column(Boolean, default=False)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
 
     outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
     created_at = Column(DateTime, default=func.now())
@@ -49,13 +49,13 @@ class Distributor(Base):
 
     state = relationship("State")
     zone = relationship("Zone")
-    parent_ss = relationship("SuperStockist", back_populates="distributors")
+    parent_ss = relationship("SuperStockist", back_populates="distributor")
     user = relationship("User")
-    retailers = relationship("Retailer", back_populates="linked_distributor")
+    retailer = relationship("Retailer", back_populates="linked_distributor")
 
 
 class Retailer(Base):
-    __tablename__ = "retailers"
+    __tablename__ = "retailer"
 
     id = Column(Integer, primary_key=True, index=True)
     shop_name = Column(String(100), nullable=False)
@@ -70,8 +70,8 @@ class Retailer(Base):
     area_id = Column(Integer, ForeignKey("area.id"), nullable=True)
     territory_id = Column(Integer, ForeignKey("territory.id"))
 
-    linked_distributor_id = Column(Integer, ForeignKey("distributors.id"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
+    linked_distributor_id = Column(Integer, ForeignKey("distributor.id"), nullable=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=True)
 
     outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
     created_at = Column(DateTime, default=func.now())
@@ -82,5 +82,5 @@ class Retailer(Base):
     region = relationship("Region")
     state = relationship("State")
     zone = relationship("Zone")
-    linked_distributor = relationship("Distributor", back_populates="retailers")
+    linked_distributor = relationship("Distributor", back_populates="retailer")
     user = relationship("User")

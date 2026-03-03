@@ -96,9 +96,7 @@ def delete_super_stockist(
     return None
 
 
-# ==========================================
-# DISTRIBUTORS
-# ==========================================
+
 @router.post("/distributors", response_model=DistributorRead, status_code=status.HTTP_201_CREATED)
 def add_distributor(
         dist_in: DistributorCreate,

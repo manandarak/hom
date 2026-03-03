@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
 from src.app.core.database import engine, Base, SessionLocal
 from src.app.core.security import get_password_hash
+
+# CRITICAL: We MUST import every single model file here so SQLAlchemy
+# registers all the new "Fat Table" columns before calling create_all().
 import src.app.models.user
 import src.app.models.partner
 import src.app.models.product
@@ -12,6 +15,7 @@ import src.app.models.sales_tertiary
 import src.app.models.finance
 import src.app.models.logistics
 import src.app.models.pricing
+
 from src.app.models.user import User, Role, Permission
 
 MASTER_PERMISSIONS = [
@@ -74,13 +78,23 @@ def reset_and_seed_database():
 
     db = SessionLocal()
     try:
+        # Step 1: Seed all permissions
         seed_permissions(db)
 
+        # Step 2: Grab all newly created permissions from the DB
+        all_permissions_in_db = db.query(Permission).all()
+
         print("🌱 Seeding default Admin role and user...")
-        admin_role = Role(name="Admin", description="Super Administrator with full access")
+        # Step 3: Create the Admin role and attach ALL permissions to it instantly
+        admin_role = Role(
+            name="Admin",
+            description="Super Administrator with full access",
+            permissions=all_permissions_in_db
+        )
         db.add(admin_role)
         db.flush()
 
+        # Step 4: Create the default Admin user
         admin_user = User(
             username="admin",
             password_hash=get_password_hash("admin123"),

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from src.app.models.user import User
+from src.app.models.user import User, Role, Permission
 from src.app.schemas.user import UserCreate, UserUpdate
 from src.app.models.geography import Territory, Area, Region, State
 
@@ -15,11 +15,8 @@ def create_user(db: Session, user: UserCreate):
     hashed_password = get_password_hash(user.password)
     user_data = user.model_dump()
     user_data["password_hash"] = hashed_password
-    del user_data["password"]
 
-    # --- CRITICAL FIX: Backend Auto-Stamping for Users ---
-    # Ensures that even if created via an external API with just a territory,
-    # the user still inherits the full geographic chain for Permissions.
+    del user_data["password"]
     if user_data.get("assigned_territory_id"):
         territory = db.query(Territory).filter(Territory.id == user_data["assigned_territory_id"]).first()
         if territory:
@@ -64,7 +61,6 @@ def update_user(db: Session, user_id: int, user_in: UserUpdate):
         update_data["password_hash"] = get_password_hash(update_data["password"])
         del update_data["password"]
 
-    # --- Update Geography Stamping if Territory Changes ---
     if update_data.get("assigned_territory_id"):
         territory = db.query(Territory).filter(Territory.id == update_data["assigned_territory_id"]).first()
         if territory:
@@ -94,3 +90,61 @@ def delete_user(db: Session, user_id: int):
         db.commit()
         return True
     return False
+
+
+
+def create_role(db: Session, role_in):
+    db_role = Role(name=role_in.name, description=role_in.description)
+    db.add(db_role)
+    db.commit()
+    db.refresh(db_role)
+    return db_role
+
+
+def get_roles(db: Session):
+    return db.query(Role).all()
+
+
+def update_role(db: Session, role_id: int, role_in):
+    db_role = db.query(Role).filter(Role.id == role_id).first()
+    if not db_role:
+        return None
+    db_role.name = role_in.name
+    db_role.description = role_in.description
+    db.commit()
+    db.refresh(db_role)
+    return db_role
+
+
+def delete_role(db: Session, role_id: int):
+    db_role = db.query(Role).filter(Role.id == role_id).first()
+    if db_role:
+        db.delete(db_role)
+        db.commit()
+        return True
+    return False
+
+
+
+def get_all_permissions(db: Session):
+    return db.query(Permission).all()
+
+
+def update_role_permissions(db: Session, role_id: int, permission_ids: list[int]):
+    db_role = db.query(Role).filter(Role.id == role_id).first()
+    if not db_role:
+        return None
+
+    if db_role.name.lower() == "admin":
+        raise ValueError("Cannot modify permissions for the master Admin role.")
+
+    db_role.permissions = []
+    db.flush()
+
+    if permission_ids:
+        perms = db.query(Permission).filter(Permission.id.in_(permission_ids)).all()
+        db_role.permissions.extend(perms)
+
+    db.commit()
+    db.refresh(db_role)
+    return db_role
