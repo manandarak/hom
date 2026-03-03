@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-from src.app.core.security import get_current_user
+from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.models.partner import SuperStockist, Distributor
 from src.app.models.sales_primary import PrimaryOrder, PrimaryOrderItems
@@ -9,26 +9,37 @@ from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead, Dispatc
 from src.app.crud.primary_sales import create_primary_order
 from src.app.services.order_service import OrderService
 from src.app.services.permission_service import PermissionService
-from src.app.core.security import check_permissions
-
 
 router = APIRouter()
 
+
+def verify_primary_ownership(db: Session, order: PrimaryOrder, current_user: User):
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name == "SuperStockist":
+        ss = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
+        if not ss or (order.to_entity_id != ss.id and order.from_entity_id != ss.id):
+            raise HTTPException(status_code=403, detail="Unauthorized: You do not own this order.")
+    elif role_name == "Distributor":
+        dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+        if not dist or order.to_entity_id != dist.id:
+            raise HTTPException(status_code=403, detail="Unauthorized: You do not own this order.")
+
+
 @router.get("/", response_model=list[PrimaryOrderRead])
 def get_all_primary_orders(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("create_primary_order")),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Fetch primary orders filtered dynamically based on user role and hierarchy."""
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = "manage_roles" in user_perms
+
+    if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
+        raise HTTPException(status_code=403, detail="Security Clearance Denied.")
+
     query = db.query(PrimaryOrder)
+    role_name = current_user.role.name if current_user.role else ""
 
-    if not current_user.role:
-        return []
-
-    role_name = current_user.role.name
-    scope = PermissionService.get_geo_scope(current_user)
-
-    if role_name == "Admin":
+    if is_admin or "view_all_orders" in user_perms:
         return query.order_by(PrimaryOrder.id.desc()).all()
 
     if role_name == "SuperStockist":
@@ -46,98 +57,104 @@ def get_all_primary_orders(
     elif role_name == "Retailer":
         return []
 
-    if scope and "id" not in scope:
-        query = query.filter_by(**scope)
-
+    # Apply Smart Cascade for Internal Teams
+    query = PermissionService.apply_geo_filter(query, PrimaryOrder, current_user)
     return query.order_by(PrimaryOrder.id.desc()).all()
 
 
 @router.post("/", response_model=PrimaryOrderRead, status_code=status.HTTP_201_CREATED)
-def place_primary_order(order_in: PrimaryOrderCreate, db: Session = Depends(get_db)):
-    """
-    Creates a Primary Order (Factory to Super Stockist).
-    Status defaults to 'Pending'. No stock is deducted yet.
-    """
-    try:
-        # 1. Create the Order Record in the DB
-        db_order = create_primary_order(db, order_in)
+def place_primary_order(
+        order_in: PrimaryOrderCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("create_primary_order"))
+):
+    # Spoofing Protection
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name == "SuperStockist":
+        ss = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
+        if not ss or (order_in.from_entity_id != ss.id and order_in.to_entity_id != ss.id):
+            raise HTTPException(status_code=403, detail="Spoofing detected: Cannot place order for another entity.")
 
+    try:
+        db_order = create_primary_order(db, order_in)
         db.commit()
         db.refresh(db_order)
         return db_order
-
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{order_id}/dispatch")
-def dispatch_order(order_id: int, dispatch_data: DispatchPayload, db: Session = Depends(get_db),current_user: User = Depends(check_permissions("dispatch_order"))):
-    """Dispatches a primary order with partial fulfillment and logistics tracking."""
+def dispatch_order(
+        order_id: int,
+        dispatch_data: DispatchPayload,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("dispatch_order"))
+):
+    order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
+    if not order: raise HTTPException(status_code=404, detail="Order not found")
+    verify_primary_ownership(db, order, current_user)
+
     try:
-        result = OrderService.dispatch_primary_order(db, order_id, dispatch_data)
-        return result
+        return OrderService.dispatch_primary_order(db, order_id, dispatch_data)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{order_id}/receive")
-def receive_order(order_id: int, db: Session = Depends(get_db),current_user: User = Depends(check_permissions("receive_order"))):
-    """
-    Moves stock from In-Transit Inventory to the Super Stockist.
-    Updates status to 'Received'.
-    """
+def receive_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("receive_order"))
+):
+    order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
+    if not order: raise HTTPException(status_code=404, detail="Order not found")
+    verify_primary_ownership(db, order, current_user)
+
     return OrderService.receive_primary_order(db, order_id)
 
 
 @router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
-def cancel_primary_order(order_id: int, db: Session = Depends(get_db),current_user: User = Depends(check_permissions("cancel_order"))):
-    """Cancels a primary order if it has not been dispatched yet."""
+def cancel_primary_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("cancel_order"))
+):
     order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+    if not order: raise HTTPException(status_code=404, detail="Order not found")
+    verify_primary_ownership(db, order, current_user)
 
     if order.status != "Pending":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel order. Current status is '{order.status}'. Only 'Pending' orders can be cancelled."
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot cancel order in '{order.status}' status.")
 
     order.status = "Cancelled"
     db.commit()
-    return {"message": f"Order {order.order_number} has been cancelled successfully."}
+    return {"message": f"Order {order.order_number} cancelled."}
 
 
 @router.put("/{order_id}", status_code=status.HTTP_200_OK)
-def update_primary_order(order_id: int, update_in: PrimaryOrderCreate, db: Session = Depends(get_db)):
-    """Updates the items in a primary order before it is dispatched."""
+def update_primary_order(
+        order_id: int,
+        update_in: PrimaryOrderCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("update_order"))
+):
     order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+    if not order: raise HTTPException(status_code=404, detail="Order not found")
+    verify_primary_ownership(db, order, current_user)
 
     if order.status != "Pending":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot update order in '{order.status}' status. Create a new order instead."
-        )
+        raise HTTPException(status_code=400, detail="Cannot update non-pending order.")
 
-    # 1. Delete the old items completely
     db.query(PrimaryOrderItems).filter(PrimaryOrderItems.primary_order_id == order_id).delete()
     db.flush()
 
-    # 2. Insert the fresh, corrected items
     for item in update_in.items:
         new_item = PrimaryOrderItems(
-            primary_order_id=order.id,
-            product_id=item.product_id,
-            batch_number=item.batch_number,
-            quantity_cases=item.quantity,
-            dispatched_cases=0,
-            backordered_cases=0,
-            free_cases=0
+            primary_order_id=order.id, product_id=item.product_id, batch_number=item.batch_number,
+            quantity_cases=item.quantity, dispatched_cases=0, backordered_cases=0, free_cases=0
         )
         db.add(new_item)
 

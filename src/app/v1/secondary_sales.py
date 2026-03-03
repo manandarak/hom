@@ -18,14 +18,39 @@ from src.app.models.geography import Territory, Area, Region, State
 router = APIRouter()
 
 
+# --- SECURITY HELPER: Prevent Execution Spoofing ---
+def verify_secondary_ownership(db: Session, order: SecondaryOrder, current_user: User):
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name == "Distributor":
+        dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+        if not dist or order.distributor_id != dist.id:
+            raise HTTPException(status_code=403, detail="Unauthorized: You do not own this order.")
+    elif role_name == "Retailer":
+        ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not ret or order.retailer_id != ret.id:
+            raise HTTPException(status_code=403, detail="Unauthorized: You do not own this order.")
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def record_secondary_sale(
         sale_in: SecondaryOrderCreate,
         db: Session = Depends(get_db),
-        # SECURED: Only users with create permission can place secondary orders
         current_user: User = Depends(check_permissions("create_secondary_order"))
 ):
     """Stage 1: Initialize order as PENDING."""
+
+    # SECURITY: Prevent a Retailer/Distributor from placing an order for someone else
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name == "Distributor":
+        dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+        if not dist or dist.id != sale_in.distributor_id:
+            raise HTTPException(status_code=403,
+                                detail="Spoofing detected: Cannot act on behalf of another Distributor.")
+    elif role_name == "Retailer":
+        ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not ret or ret.id != sale_in.retailer_id:
+            raise HTTPException(status_code=403, detail="Spoofing detected: Cannot act on behalf of another Retailer.")
+
     try:
         retailer = db.query(Retailer).filter(Retailer.id == sale_in.retailer_id, Retailer.is_active == True).first()
         if not retailer:
@@ -104,13 +129,15 @@ def record_secondary_sale(
 def approve_secondary_order(
         order_id: int,
         db: Session = Depends(get_db),
-        # SECURED: Only users with approve permission can accept orders
         current_user: User = Depends(check_permissions("approve_order"))
 ):
     """Stage 2: Distributor actively accepts the order."""
     order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
     if not order or order.status not in ["PENDING", "Pending"]:
         raise HTTPException(status_code=400, detail="Order not found or not in PENDING state.")
+
+    # SECURITY: Verify ownership
+    verify_secondary_ownership(db, order, current_user)
 
     order.status = "APPROVED"
     db.commit()
@@ -122,7 +149,6 @@ def dispatch_secondary_order(
         order_id: int,
         payload: DispatchPayload,
         db: Session = Depends(get_db),
-        # SECURED: Only users with dispatch permission can send stock
         current_user: User = Depends(check_permissions("dispatch_order"))
 ):
     """Stage 3: Dispatch logs details, deducts sender stock, and creates financial debt."""
@@ -130,6 +156,9 @@ def dispatch_secondary_order(
         order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
         if not order or order.status != "APPROVED":
             raise HTTPException(status_code=400, detail="Order must be APPROVED before dispatch.")
+
+        # SECURITY: Verify ownership
+        verify_secondary_ownership(db, order, current_user)
 
         invoice_ref = f"INV-SEC-{order.id}"
 
@@ -153,7 +182,6 @@ def dispatch_secondary_order(
 def receive_secondary_order(
         order_id: int,
         db: Session = Depends(get_db),
-        # SECURED: Only users with receive permission can mark goods arrived
         current_user: User = Depends(check_permissions("receive_order"))
 ):
     """Stage 4: Retailer physically receives the goods (Adds to their stock)."""
@@ -161,6 +189,9 @@ def receive_secondary_order(
         order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
         if not order or order.status != "DISPATCHED":
             raise HTTPException(status_code=400, detail="Order must be DISPATCHED before receiving.")
+
+        # SECURITY: Verify ownership
+        verify_secondary_ownership(db, order, current_user)
 
         invoice_ref = f"INV-SEC-{order.id}"
 
@@ -182,13 +213,15 @@ def receive_secondary_order(
 def cancel_secondary_order(
         order_id: int,
         db: Session = Depends(get_db),
-        # SECURED: Only users with cancel permission can revert orders
         current_user: User = Depends(check_permissions("cancel_order"))
 ):
     try:
         order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Secondary Order not found")
+
+        # SECURITY: Verify ownership
+        verify_secondary_ownership(db, order, current_user)
 
         # If it was already dispatched, revert stock and finances
         if order.status in ["DISPATCHED", "RECEIVED"]:
@@ -214,13 +247,11 @@ def cancel_secondary_order(
 @router.get("/")
 def get_all_secondary_orders(
         db: Session = Depends(get_db),
-        # SECURED: We let anyone in who has either view_own_orders or view_all_orders.
-        # If they have neither, they can't even hit the endpoint.
         current_user: User = Depends(get_current_user)
 ):
     # Quick manual check to ensure they have at least one viewing permission
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
-    is_admin = current_user.role.name == "Admin" if current_user.role else False
+    is_admin = "manage_roles" in user_perms
 
     if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
         raise HTTPException(status_code=403, detail="Security Clearance Denied. Requires order viewing permission.")
@@ -233,7 +264,7 @@ def get_all_secondary_orders(
     role_name = current_user.role.name
 
     # 1. Admin gets everything
-    if role_name == "Admin" or "view_all_orders" in user_perms:
+    if is_admin or "view_all_orders" in user_perms:
         pass
 
     # 2. Partners strictly see their own entity's orders (Fail-Closed)
@@ -254,14 +285,9 @@ def get_all_secondary_orders(
 
     # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     else:
-        scope = PermissionService.get_geo_scope(current_user)
-
-        # If the permission service returns the failsafe ID, deny access
-        if not scope or "id" in scope:
-            return []
-
-        # THE FAT TABLE FIX: We delete the Retailer join and filter the SecondaryOrder table directly.
-        query = query.filter_by(**scope)
+        # THE SAFE JOIN FIX: We join the Retailer table to ensure apply_geo_filter can find zone_id, state_id, etc.
+        query = query.join(Retailer, SecondaryOrder.retailer_id == Retailer.id)
+        query = PermissionService.apply_geo_filter(query, Retailer, current_user)
 
     # Execute final secured query
     orders = query.order_by(SecondaryOrder.id.desc()).all()

@@ -26,6 +26,15 @@ from src.app.crud.tertiary_sales import (
 router = APIRouter()
 
 
+# --- SECURITY HELPER: Prevent Execution Spoofing ---
+def verify_tertiary_ownership(db: Session, order: TertiaryOrder, current_user: User):
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name == "Retailer":
+        ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not ret or order.fulfilled_by_retailer_id != ret.id:
+            raise HTTPException(status_code=403, detail="Unauthorized: You do not own this order.")
+
+
 @router.get("/")
 def get_all_tertiary_orders(
         db: Session = Depends(get_db),
@@ -34,7 +43,7 @@ def get_all_tertiary_orders(
     """Fetch Tertiary Orders scoped dynamically based on user role and geography."""
     # SECURED: Ensure they have at least one viewing permission
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
-    is_admin = current_user.role.name == "Admin" if current_user.role else False
+    is_admin = "manage_roles" in user_perms
 
     if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
@@ -48,7 +57,7 @@ def get_all_tertiary_orders(
     role_name = current_user.role.name
 
     # 1. Admin / Global Viewers get everything
-    if role_name == "Admin" or "view_all_orders" in user_perms:
+    if is_admin or "view_all_orders" in user_perms:
         return query.order_by(TertiaryOrder.id.desc()).all()
 
     # 2. Partners strictly see ONLY their own firm's orders
@@ -64,13 +73,9 @@ def get_all_tertiary_orders(
 
     # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     else:
-        scope = PermissionService.get_geo_scope(current_user)
-        if not scope or "id" in scope:
-            return []  # Fail-Closed failsafe
-
-        # THE FAT TABLE FIX: No joins needed. Instant high-speed filtering directly on TertiaryOrder!
-        query = query.filter_by(**scope)
-
+        # THE SAFE JOIN FIX: We join the Retailer table to ensure apply_geo_filter can find zone_id, state_id, etc.
+        query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
+        query = PermissionService.apply_geo_filter(query, Retailer, current_user)
         return query.order_by(TertiaryOrder.id.desc()).all()
 
 
@@ -84,7 +89,25 @@ def record_tertiary_sale(
     Consumer or Retailer logs a sale.
     This is just a 'request' until approved by the Sales Officer (SO).
     """
+    # SECURITY: Prevent Retailer from spoofing an order for another Retailer
+    role_name = current_user.role.name if current_user.role else ""
+    retailer = db.query(Retailer).filter(Retailer.id == sale_in.fulfilled_by_retailer_id).first()
+
+    if role_name == "Retailer":
+        if not retailer or retailer.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Spoofing detected.")
+
     new_sale = create_tertiary_sale(db, sale_in)
+
+    # FAT STAMPING HOTFIX: Stamp the geo data onto the order immediately after creation
+    if retailer:
+        new_sale.zone_id = retailer.zone_id
+        new_sale.state_id = retailer.state_id
+        new_sale.region_id = retailer.region_id
+        new_sale.area_id = retailer.area_id
+        new_sale.territory_id = retailer.territory_id
+        db.commit()
+
     return {"message": "Tertiary sale logged successfully", "order_id": new_sale.id}
 
 
@@ -96,7 +119,7 @@ def get_pending_requests(
 ):
     """Fetch pending sales for a specific Sales Officer to review."""
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
-    is_admin = current_user.role.name == "Admin" if current_user.role else False
+    is_admin = "manage_roles" in user_perms
 
     if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Security Clearance Denied.")
@@ -122,14 +145,22 @@ def get_my_pending_requests(
         current_user: User = Depends(get_current_user)
 ):
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
-    is_admin = current_user.role.name == "Admin" if current_user.role else False
+    is_admin = "manage_roles" in user_perms
 
     if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Security Clearance Denied.")
 
-    # Updated to use the new get_geo_scope instead of get_user_data_scope
-    scope_filter = PermissionService.get_geo_scope(current_user)
-    return get_scoped_pending_orders(db, scope_filter)
+    query = db.query(TertiaryOrder).filter(TertiaryOrder.status.in_(["PENDING", "Pending"]))
+    role_name = current_user.role.name if current_user.role else ""
+
+    if role_name == "Retailer":
+        retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not retailer: return []
+        return query.filter(TertiaryOrder.fulfilled_by_retailer_id == retailer.id).all()
+
+    query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
+    query = PermissionService.apply_geo_filter(query, Retailer, current_user)
+    return query.order_by(TertiaryOrder.id.desc()).all()
 
 
 @router.post("/consumers", response_model=EndConsumerRead, status_code=status.HTTP_201_CREATED)
@@ -186,7 +217,9 @@ def cancel_tertiary_order(
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tertiary Order not found")
 
-    if order.status != "Pending":
+    verify_tertiary_ownership(db, order, current_user)
+
+    if order.status not in ["Pending", "PENDING"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot cancel order. Current status is '{order.status}'."
@@ -210,7 +243,9 @@ def update_tertiary_order(
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tertiary Order not found")
 
-    if order.status != "Pending":
+    verify_tertiary_ownership(db, order, current_user)
+
+    if order.status not in ["Pending", "PENDING"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot update order in '{order.status}' status."
