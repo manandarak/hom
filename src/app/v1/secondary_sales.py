@@ -288,6 +288,8 @@ def get_all_secondary_orders(
         # THE SAFE JOIN FIX: We join the Retailer table to ensure apply_geo_filter can find zone_id, state_id, etc.
         query = query.join(Retailer, SecondaryOrder.retailer_id == Retailer.id)
         query = PermissionService.apply_geo_filter(query, Retailer, current_user)
+        # CRITICAL FIX: Ensure we only return the SecondaryOrder object, not the Joined tuple
+        query = query.with_entities(SecondaryOrder)
 
     # Execute final secured query
     orders = query.order_by(SecondaryOrder.id.desc()).all()

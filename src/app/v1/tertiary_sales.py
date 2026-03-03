@@ -73,10 +73,38 @@ def get_all_tertiary_orders(
 
     # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     else:
-        # THE SAFE JOIN FIX: We join the Retailer table to ensure apply_geo_filter can find zone_id, state_id, etc.
+        # THE SAFE JOIN FIX
         query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
         query = PermissionService.apply_geo_filter(query, Retailer, current_user)
+        # CRITICAL FIX: Ensure we only return the TertiaryOrder object, not the Joined tuple
+        query = query.with_entities(TertiaryOrder)
         return query.order_by(TertiaryOrder.id.desc()).all()
+
+
+@router.get("/pending")
+def get_my_pending_requests(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = "manage_roles" in user_perms
+
+    if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Security Clearance Denied.")
+
+    query = db.query(TertiaryOrder).filter(TertiaryOrder.status.in_(["PENDING", "Pending"]))
+    role_name = current_user.role.name if current_user.role else ""
+
+    if role_name == "Retailer":
+        retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if not retailer: return []
+        return query.filter(TertiaryOrder.fulfilled_by_retailer_id == retailer.id).all()
+
+    query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
+    query = PermissionService.apply_geo_filter(query, Retailer, current_user)
+    # CRITICAL FIX: Extract entity
+    query = query.with_entities(TertiaryOrder)
+    return query.order_by(TertiaryOrder.id.desc()).all()
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
