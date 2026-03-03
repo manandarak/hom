@@ -9,7 +9,7 @@ from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead, Dispatc
 from src.app.crud.primary_sales import create_primary_order
 from src.app.services.order_service import OrderService
 from src.app.services.permission_service import PermissionService
-
+from sqlalchemy import or_, and_
 router = APIRouter()
 
 
@@ -57,8 +57,33 @@ def get_all_primary_orders(
     elif role_name == "Retailer":
         return []
 
-    # Apply Smart Cascade for Internal Teams
-    query = PermissionService.apply_geo_filter(query, PrimaryOrder, current_user)
+    # --- CRITICAL FIX: Safe Join Mapping for Primary Orders ---
+    # We figure out which SuperStockists and Distributors the Internal User is allowed to see,
+    # then we only fetch Primary Orders going to those specific IDs.
+
+    allowed_ss_query = db.query(SuperStockist.id)
+    allowed_dist_query = db.query(Distributor.id)
+
+    allowed_ss = PermissionService.apply_geo_filter(allowed_ss_query, SuperStockist, current_user).all()
+    allowed_dist = PermissionService.apply_geo_filter(allowed_dist_query, Distributor, current_user).all()
+
+    ss_ids = [s[0] for s in allowed_ss]
+    dist_ids = [d[0] for d in allowed_dist]
+
+    conditions = []
+    if ss_ids:
+        # Include orders going to allowed Super Stockists
+        conditions.append(and_(PrimaryOrder.type == 'FACTORY_TO_SS', PrimaryOrder.to_entity_id.in_(ss_ids)))
+    if dist_ids:
+        # Include orders going to allowed Distributors
+        conditions.append(
+            and_(PrimaryOrder.type.in_(['FACTORY_TO_DB', 'SS_TO_DB']), PrimaryOrder.to_entity_id.in_(dist_ids)))
+
+    if conditions:
+        query = query.filter(or_(*conditions))
+    else:
+        return []  # User has no entities in their assigned territory
+
     return query.order_by(PrimaryOrder.id.desc()).all()
 
 

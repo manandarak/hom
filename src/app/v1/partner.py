@@ -1,14 +1,11 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-
-# --- NEW IMPORTS FOR SECURITY ---
 from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.services.permission_service import PermissionService
-# --------------------------------
-
 from src.app.models.partner import SuperStockist, Distributor, Retailer
+from src.app.models.geography import Territory, Area, Region, State
 from src.app.schemas.partner import (
     SuperStockistCreate, SuperStockistRead, SuperStockistUpdate,
     DistributorCreate, DistributorRead, DistributorUpdate,
@@ -39,25 +36,22 @@ def list_super_stockists(
     query = db.query(SuperStockist)
 
     if not current_user.role: return []
-    if current_user.role.name == "Admin": return query.all()
+    user_perms = [p.name for p in current_user.role.permissions]
+    if "manage_roles" in user_perms: return query.all()
 
-    # Partners only see themselves
+
     if current_user.role.name == "SuperStockist":
         return query.filter(SuperStockist.user_id == current_user.id).all()
-    elif current_user.role.name in ["Distributor", "Retailer"]:
+    elif current_user.role.name == "Distributor":
+        dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+        if dist and dist.parent_ss_id:
+            return query.filter(SuperStockist.id == dist.parent_ss_id).all()
+        if dist and dist.state_id:
+            return query.all()
+    elif current_user.role.name == "Retailer":
         return []
 
-    # Internal Teams
-    scope = PermissionService.get_geo_scope(current_user)
-    if scope and "id" not in scope:
-        for key, value in scope.items():
-            if hasattr(SuperStockist, key) and value is not None:
-                query = query.filter(getattr(SuperStockist, key) == value)
-            else:
-                return []  # Fail-Closed if scope doesn't apply
-        return query.all()
-
-    return []
+    return PermissionService.apply_geo_filter(query, SuperStockist, current_user).all()
 
 
 @router.patch("/super-stockists/{ss_id}", response_model=SuperStockistRead)
@@ -74,6 +68,7 @@ def update_super_stockist(
     update_data = ss_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_ss, key, value)
+
     db.commit()
     db.refresh(db_ss)
     return db_ss
@@ -111,24 +106,21 @@ def list_distributors(
     query = db.query(Distributor)
 
     if not current_user.role: return []
-    if current_user.role.name == "Admin": return query.all()
+    user_perms = [p.name for p in current_user.role.permissions]
+    if "manage_roles" in user_perms: return query.all()
 
     if current_user.role.name == "Distributor":
         return query.filter(Distributor.user_id == current_user.id).all()
+    elif current_user.role.name == "SuperStockist":
+        ss = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
+        if ss: return query.filter(Distributor.parent_ss_id == ss.id).all()
     elif current_user.role.name == "Retailer":
-        return []
-
-    # Internal Teams & Higher Partners (like SS viewing downstream)
-    scope = PermissionService.get_geo_scope(current_user)
-    if scope and "id" not in scope:
-        for key, value in scope.items():
-            if hasattr(Distributor, key) and value is not None:
-                query = query.filter(getattr(Distributor, key) == value)
-            else:
-                return []  # Fail-Closed
+        ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
+        if ret and ret.linked_distributor_id:
+            return query.filter(Distributor.id == ret.linked_distributor_id).all()
         return query.all()
 
-    return []
+    return PermissionService.apply_geo_filter(query, Distributor, current_user).all()
 
 
 @router.patch("/distributors/{dist_id}", response_model=DistributorRead)
@@ -145,6 +137,12 @@ def update_distributor(
     update_data = dist_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_dist, key, value)
+
+    if "state_id" in update_data and update_data["state_id"]:
+        state = db.query(State).filter(State.id == update_data["state_id"]).first()
+        if state:
+            db_dist.zone_id = state.zone_id
+
     db.commit()
     db.refresh(db_dist)
     return db_dist
@@ -164,9 +162,6 @@ def delete_distributor(
     return None
 
 
-# ==========================================
-# RETAILERS
-# ==========================================
 @router.post("/retailers", response_model=RetailerRead, status_code=status.HTTP_201_CREATED)
 def add_retailer(
         ret_in: RetailerCreate,
@@ -185,22 +180,18 @@ def list_retailers(
     query = db.query(Retailer)
 
     if not current_user.role: return []
-    if current_user.role.name == "Admin": return query.all()
+    user_perms = [p.name for p in current_user.role.permissions]
+    if "manage_roles" in user_perms: return query.all()
 
     if current_user.role.name == "Retailer":
         return query.filter(Retailer.user_id == current_user.id).all()
+    elif current_user.role.name == "Distributor":
+        dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
+        if dist: return query.filter(Retailer.linked_distributor_id == dist.id).all()
+    elif current_user.role.name == "SuperStockist":
+        return []
 
-    # Internal Teams & Higher Partners (SS, Dist) viewing downstream
-    scope = PermissionService.get_geo_scope(current_user)
-    if scope and "id" not in scope:
-        for key, value in scope.items():
-            if hasattr(Retailer, key) and value is not None:
-                query = query.filter(getattr(Retailer, key) == value)
-            else:
-                return []  # Fail-Closed
-        return query.all()
-
-    return []
+    return PermissionService.apply_geo_filter(query, Retailer, current_user).all()
 
 
 @router.patch("/retailers/{ret_id}", response_model=RetailerRead)
@@ -210,16 +201,31 @@ def update_retailer(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    db_ret = db.query(Retailer).filter(Retailer.id == ret_id).first()
-    if not db_ret:
+    retailer = db.query(Retailer).filter(Retailer.id == ret_id).first()
+    if not retailer:
         raise HTTPException(status_code=404, detail="Retailer not found")
 
     update_data = ret_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        setattr(db_ret, key, value)
+        setattr(retailer, key, value)
+
+    if "territory_id" in update_data and update_data["territory_id"]:
+        territory = db.query(Territory).filter(Territory.id == update_data["territory_id"]).first()
+        if territory:
+            retailer.area_id = territory.area_id
+            area = db.query(Area).filter(Area.id == territory.area_id).first()
+            if area:
+                retailer.region_id = area.region_id
+                region = db.query(Region).filter(Region.id == area.region_id).first()
+                if region:
+                    retailer.state_id = region.state_id
+                    state = db.query(State).filter(State.id == region.state_id).first()
+                    if state:
+                        retailer.zone_id = state.zone_id
+
     db.commit()
-    db.refresh(db_ret)
-    return db_ret
+    db.refresh(retailer)
+    return retailer
 
 
 @router.delete("/retailers/{ret_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -232,6 +238,6 @@ def delete_retailer(
     if not db_ret:
         raise HTTPException(status_code=404, detail="Retailer not found")
 
-    db_ret.is_active = False  # Changed from db.delete to soft delete to match SS and Distributor
+    db_ret.is_active = False
     db.commit()
     return None
