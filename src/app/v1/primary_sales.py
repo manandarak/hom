@@ -23,6 +23,9 @@ def verify_primary_ownership(db: Session, order: PrimaryOrder, current_user: Use
         dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if not dist or order.to_entity_id != dist.id:
             raise HTTPException(status_code=403, detail="Unauthorized: You do not own this order.")
+    else:
+        target_model = SuperStockist if order.type == 'FACTORY_TO_SS' else Distributor
+        PermissionService.verify_internal_jurisdiction(db, current_user, target_model, order.to_entity_id)
 
 
 @router.get("/", response_model=list[PrimaryOrderRead])
