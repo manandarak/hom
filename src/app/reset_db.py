@@ -34,6 +34,7 @@ MASTER_PERMISSIONS = [
 
     {"name": "view_inventory", "description": "Check stock ledgers"},
     {"name": "manage_inventory", "description": "Manual stock adjustments, audits, or adding opening stock"},
+    {"name": "create_plant", "description": "Register new manufacturing plants/factories"},
 
     {"name": "view_invoices", "description": "See generated tax invoices"},
     {"name": "manage_payments", "description": "Record offline payments or reconcile ledgers"},

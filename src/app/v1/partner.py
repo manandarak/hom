@@ -21,9 +21,6 @@ from src.app.crud.partner import (
 router = APIRouter()
 
 
-# ==========================================
-# SUPER STOCKISTS
-# ==========================================
 @router.post("/super-stockists", response_model=SuperStockistRead, status_code=status.HTTP_201_CREATED)
 def add_super_stockist(
         ss_in: SuperStockistCreate,
@@ -96,9 +93,6 @@ def delete_super_stockist(
     return None
 
 
-# ==========================================
-# DISTRIBUTORS
-# ==========================================
 @router.post("/distributors", response_model=DistributorRead, status_code=status.HTTP_201_CREATED)
 def add_distributor(
         dist_in: DistributorCreate,

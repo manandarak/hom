@@ -192,7 +192,7 @@ def get_distributor_stock(
 def create_factory(
     factory_in: FactoryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("manage_inventory"))
+    current_user: User = Depends(check_permissions("create_plant"))
 ):
     """Registers a new manufacturing plant in the database."""
 
