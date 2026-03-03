@@ -38,7 +38,7 @@ class PrimaryOrderItems(Base):
     free_cases = Column(Integer, default=0)
 
 
-    final_price_per_case = Column(DECIMAL(10, 2))  # Price after scheme discount
+    final_price_per_case = Column(DECIMAL(10, 2))
     order = relationship("PrimaryOrder", back_populates="items")
 
 

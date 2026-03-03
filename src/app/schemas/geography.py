@@ -4,7 +4,6 @@ from typing import Optional
 class GeoBase(BaseModel):
     name: str
 
-# --- CREATE SCHEMAS ---
 class ZoneCreate(GeoBase):
     pass
 
@@ -12,7 +11,7 @@ class StateCreate(GeoBase):
     zone_id: int
 
 class RegionCreate(GeoBase):
-    state_id: int  # Fixed: Was zone_id before
+    state_id: int
 
 class AreaCreate(GeoBase):
     region_id: int
@@ -20,8 +19,6 @@ class AreaCreate(GeoBase):
 class TerritoryCreate(GeoBase):
     area_id: int
 
-
-# --- READ SCHEMAS ---
 class ZoneRead(GeoBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -33,7 +30,7 @@ class StateRead(GeoBase):
 
 class RegionRead(GeoBase):
     id: int
-    state_id: int  # Fixed: Was zone_id before
+    state_id: int
     model_config = ConfigDict(from_attributes=True)
 
 class AreaRead(GeoBase):

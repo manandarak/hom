@@ -12,25 +12,21 @@ from src.app.models.inventory import (
 class StockService:
     @staticmethod
     def update_stock(db: Session, entity_type: str, entity_id: int, product_id: int, batch_number: str, qty_change: int, ref_doc: str, trans_type: str):
-        # 1. Fetch record with a pessimistic lock
         stock_record = StockService._get_stock_record(db, entity_type, entity_id, product_id, batch_number)
 
-        # 2. Negative Stock Validation
         if stock_record.current_stock_qty + qty_change < 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Insufficient stock for {entity_type} ID {entity_id}. Available: {stock_record.current_stock_qty}, Attempted to deduct: {abs(qty_change)}"
             )
 
-        # 3. Update the balance safely
         stock_record.current_stock_qty += qty_change
 
-        # 4. Create the 'History of Truth' Entry
         ledger_data = {
             "entity_type": entity_type,
             "entity_id": entity_id,
             "product_id": product_id,
-            "batch_number": batch_number,  # Ensure ledger records the exact batch
+            "batch_number": batch_number,
             "transaction_type": trans_type,
             "reference_document": ref_doc,
             "quantity_change": qty_change,
@@ -45,8 +41,6 @@ class StockService:
         model = None
         record = None
 
-        # FIX: We removed `batch_number` from the filter_by queries.
-        # We only search by the Entity ID and the Product ID to prevent 1062 Duplicate Errors.
         if entity_type == "Distributor":
             model = DistributorInventory
             record = db.query(model).filter_by(distributor_id=entity_id, product_id=product_id).with_for_update().first()
@@ -65,7 +59,6 @@ class StockService:
         else:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        # If no record exists, initialize it at 0
         if not record:
             if entity_type == "Distributor":
                 record = DistributorInventory(distributor_id=entity_id, product_id=product_id, batch_number=batch_number, current_stock_qty=0)
@@ -81,7 +74,6 @@ class StockService:
             db.add(record)
             db.flush()
         else:
-            # FIX: If the record DOES exist, simply update the batch number to the latest one
             if batch_number:
                 record.batch_number = batch_number
 

@@ -14,9 +14,6 @@ from src.app.services.stock_service import StockService
 router = APIRouter()
 
 
-# ==========================================
-# FETCH INVENTORY ENDPOINTS (WITH SNOOPING PROTECTION)
-# ==========================================
 
 @router.get("/factory/{factory_id}")
 def get_factory_stock(
@@ -24,7 +21,6 @@ def get_factory_stock(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_inventory"))
 ):
-    # Partners cannot view raw factory stock
     role_name = current_user.role.name if current_user.role else ""
     if role_name in ["SuperStockist", "Distributor", "Retailer"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
@@ -41,7 +37,6 @@ def get_ss_stock(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_inventory"))
 ):
-    # Cross-Partner Snooping Protection
     role_name = current_user.role.name if current_user.role else ""
     if role_name == "SuperStockist":
         partner = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
@@ -61,7 +56,6 @@ def get_distributor_stock(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_inventory"))
 ):
-    # Cross-Partner Snooping Protection
     role_name = current_user.role.name if current_user.role else ""
     if role_name == "Distributor":
         partner = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
@@ -81,7 +75,6 @@ def get_retailer_stock(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_inventory"))
 ):
-    # Cross-Partner Snooping Protection
     role_name = current_user.role.name if current_user.role else ""
     if role_name == "Retailer":
         partner = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
@@ -92,10 +85,6 @@ def get_retailer_stock(
     return [{"product_id": s.product_id, "batch_number": s.batch_number, "current_stock": s.current_stock_qty} for s in
             stock]
 
-
-# ==========================================
-# GLOBAL LEDGER (WITH SMART CASCADE FIX)
-# ==========================================
 
 @router.get("/ledger", response_model=list[StockLedgerRead])
 def get_stock_ledger(
@@ -111,11 +100,10 @@ def get_stock_ledger(
     is_admin = "manage_roles" in user_perms
     role_name = current_user.role.name
 
-    # 1. Admin gets everything
     if is_admin:
         return query.order_by(StockLedger.created_at.desc()).limit(100).all()
 
-    # 2. Partners strictly see ONLY their own ledger entries
+
     if role_name == "SuperStockist":
         partner = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
         if not partner: return []
@@ -131,9 +119,7 @@ def get_stock_ledger(
         if not partner: return []
         query = query.filter(StockLedger.entity_type == "Retailer", StockLedger.entity_id == partner.id)
 
-    # 3. Internal Teams - FIX: Implemented Smart Cascade Logic
     else:
-        # Base queries to find allowed IDs within their geographic scope
         ss_id_query = db.query(SuperStockist.id)
         dist_id_query = db.query(Distributor.id)
         ret_id_query = db.query(Retailer.id)
@@ -143,9 +129,8 @@ def get_stock_ledger(
                         PermissionService.apply_geo_filter(dist_id_query, Distributor, current_user).all()]
         allowed_ret = [r[0] for r in PermissionService.apply_geo_filter(ret_id_query, Retailer, current_user).all()]
 
-        # Build secure OR conditions
         conditions = []
-        conditions.append(StockLedger.entity_type == "Factory")  # Internal teams can usually see Factory dispatches
+        conditions.append(StockLedger.entity_type == "Factory")
 
         if allowed_ss:
             conditions.append(and_(StockLedger.entity_type == "SuperStockist", StockLedger.entity_id.in_(allowed_ss)))
@@ -157,14 +142,11 @@ def get_stock_ledger(
         if conditions:
             query = query.filter(or_(*conditions))
         else:
-            return []  # They have absolutely no partners in their geography
+            return []
 
     return query.order_by(StockLedger.created_at.desc()).limit(100).all()
 
 
-# ==========================================
-# MUTATIONS (FACTORY & ADJUSTMENTS)
-# ==========================================
 
 @router.post("/factory/produce", status_code=status.HTTP_201_CREATED)
 def log_factory_production(
@@ -212,14 +194,12 @@ def adjust_stock(
     if formatted_entity_type == "Superstockist":
         formatted_entity_type = "SuperStockist"
 
-    # Strict Boundry Check: Partners can only adjust their own stock
     role_name = current_user.role.name if current_user.role else ""
     if role_name in ["SuperStockist", "Distributor", "Retailer"]:
         if formatted_entity_type != role_name:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                                 detail=f"Partners can only audit {role_name} inventory.")
 
-        # Verify the ID matches their user profile
         partner_model = globals()[role_name]
         partner = db.query(partner_model).filter(partner_model.user_id == current_user.id).first()
         if not partner or partner.id != entity_id:
@@ -272,7 +252,6 @@ def get_all_factories(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_inventory"))
 ):
-    # Partners should not see internal factory lists
     role_name = current_user.role.name if current_user.role else ""
     if role_name in ["SuperStockist", "Distributor", "Retailer"]:
         return []

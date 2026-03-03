@@ -37,7 +37,6 @@ def get_states_by_zone(db: Session, zone_id: int):
     return db.query(State).filter(State.zone_id == zone_id).all()
 
 
-# --- REGION CRUD ---
 def create_region(db: Session, region: RegionCreate):
     db_region = Region(name=region.name, state_id=region.state_id)
     db.add(db_region)

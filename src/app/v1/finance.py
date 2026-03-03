@@ -69,32 +69,26 @@ def get_company_finance_summary(
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
     is_admin = "manage_roles" in user_perms
 
-    # Base queries for outstanding balances
     ss_query = db.query(func.sum(SuperStockist.outstanding_balance))
     dist_query = db.query(func.sum(Distributor.outstanding_balance))
     ret_query = db.query(func.sum(Retailer.outstanding_balance))
 
-    # Base query for allowed partner IDs
     ss_id_query = db.query(SuperStockist.id)
     dist_id_query = db.query(Distributor.id)
     ret_id_query = db.query(Retailer.id)
 
     ledger_query = db.query(FinancialLedger)
 
-    # Apply Smart Cascade if not admin
     if not is_admin:
-        # Secure the scalar aggregations
         ss_query = PermissionService.apply_geo_filter(ss_query, SuperStockist, current_user)
         dist_query = PermissionService.apply_geo_filter(dist_query, Distributor, current_user)
         ret_query = PermissionService.apply_geo_filter(ret_query, Retailer, current_user)
 
-        # Secure the allowed ID lists
         allowed_ss = [s[0] for s in PermissionService.apply_geo_filter(ss_id_query, SuperStockist, current_user).all()]
         allowed_dist = [d[0] for d in
                         PermissionService.apply_geo_filter(dist_id_query, Distributor, current_user).all()]
         allowed_ret = [r[0] for r in PermissionService.apply_geo_filter(ret_id_query, Retailer, current_user).all()]
 
-        # Filter the ledger by the strictly allowed IDs
         ledger_query = ledger_query.filter(
             or_(
                 and_(FinancialLedger.party_type == "SuperStockist", FinancialLedger.party_id.in_(allowed_ss)),

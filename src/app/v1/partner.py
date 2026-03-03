@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
+
+# --- SECURITY & RBAC IMPORTS ---
 from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.services.permission_service import PermissionService
+
 from src.app.models.partner import SuperStockist, Distributor, Retailer
 from src.app.models.geography import Territory, Area, Region, State
 from src.app.schemas.partner import (
@@ -18,6 +21,9 @@ from src.app.crud.partner import (
 router = APIRouter()
 
 
+# ==========================================
+# SUPER STOCKISTS
+# ==========================================
 @router.post("/super-stockists", response_model=SuperStockistRead, status_code=status.HTTP_201_CREATED)
 def add_super_stockist(
         ss_in: SuperStockistCreate,
@@ -32,25 +38,27 @@ def list_super_stockists(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_partners"))
 ):
-    """Securely scoped Super Stockist fetch."""
     query = db.query(SuperStockist)
 
     if not current_user.role: return []
     user_perms = [p.name for p in current_user.role.permissions]
     if "manage_roles" in user_perms: return query.all()
 
-
+    # Partners
     if current_user.role.name == "SuperStockist":
         return query.filter(SuperStockist.user_id == current_user.id).all()
     elif current_user.role.name == "Distributor":
         dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if dist and dist.parent_ss_id:
             return query.filter(SuperStockist.id == dist.parent_ss_id).all()
-        if dist and dist.state_id:
-            return query.all()
+        # CRITICAL FIX: Secure Open Market Fallback
+        if dist and dist.zone_id:
+            return query.filter(SuperStockist.zone_id == dist.zone_id).all()
+        return []  # Fail closed if no geo mapping
     elif current_user.role.name == "Retailer":
         return []
 
+    # Internal Teams using Smart Cascade
     return PermissionService.apply_geo_filter(query, SuperStockist, current_user).all()
 
 
@@ -88,6 +96,9 @@ def delete_super_stockist(
     return None
 
 
+# ==========================================
+# DISTRIBUTORS
+# ==========================================
 @router.post("/distributors", response_model=DistributorRead, status_code=status.HTTP_201_CREATED)
 def add_distributor(
         dist_in: DistributorCreate,
@@ -102,7 +113,6 @@ def list_distributors(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_partners"))
 ):
-    """Securely scoped Distributor fetch."""
     query = db.query(Distributor)
 
     if not current_user.role: return []
@@ -118,8 +128,12 @@ def list_distributors(
         ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
         if ret and ret.linked_distributor_id:
             return query.filter(Distributor.id == ret.linked_distributor_id).all()
-        return query.all()
+        # CRITICAL FIX: Secure Open Market Fallback
+        if ret and ret.state_id:
+            return query.filter(Distributor.state_id == ret.state_id).all()
+        return []  # Fail closed
 
+    # Internal Teams using Smart Cascade
     return PermissionService.apply_geo_filter(query, Distributor, current_user).all()
 
 
@@ -138,6 +152,7 @@ def update_distributor(
     for key, value in update_data.items():
         setattr(db_dist, key, value)
 
+    # Re-stamp Geography if State changes
     if "state_id" in update_data and update_data["state_id"]:
         state = db.query(State).filter(State.id == update_data["state_id"]).first()
         if state:
@@ -162,6 +177,9 @@ def delete_distributor(
     return None
 
 
+# ==========================================
+# RETAILERS
+# ==========================================
 @router.post("/retailers", response_model=RetailerRead, status_code=status.HTTP_201_CREATED)
 def add_retailer(
         ret_in: RetailerCreate,
@@ -176,7 +194,6 @@ def list_retailers(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("view_partners"))
 ):
-    """Securely scoped Retailer fetch."""
     query = db.query(Retailer)
 
     if not current_user.role: return []
@@ -191,6 +208,7 @@ def list_retailers(
     elif current_user.role.name == "SuperStockist":
         return []
 
+    # Internal Teams using Smart Cascade
     return PermissionService.apply_geo_filter(query, Retailer, current_user).all()
 
 
@@ -209,6 +227,7 @@ def update_retailer(
     for key, value in update_data.items():
         setattr(retailer, key, value)
 
+    # Re-stamp Geography if Territory changes
     if "territory_id" in update_data and update_data["territory_id"]:
         territory = db.query(Territory).filter(Territory.id == update_data["territory_id"]).first()
         if territory:

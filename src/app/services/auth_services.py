@@ -8,7 +8,6 @@ from src.app.models.user import User
 class AuthService:
     @staticmethod
     def authenticate_user(db: Session, login_id: str, password: str):
-        # Now 'User' is recognized
         user = db.query(User).filter(
             or_(User.username == login_id, User.email == login_id)
         ).first()

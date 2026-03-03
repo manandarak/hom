@@ -23,7 +23,6 @@ class OrderService:
         if not order or order.status not in ["Pending", "Partially Dispatched"]:
             raise HTTPException(status_code=400, detail="Order cannot be dispatched")
 
-        # CHANGE 1: Initialize as a Decimal, not a float
         total_invoice_amount = Decimal("0.00")
 
         from_entity_type, to_entity_type = OrderService.get_routing_entities(order.type)
@@ -32,18 +31,15 @@ class OrderService:
         actual_items_dispatched = 0
 
         for item in order.items:
-            # Skip items that are already fully dispatched from a previous run
             if item.backordered_cases == 0 and item.dispatched_cases > 0:
                 continue
 
             qty_to_fulfill = item.backordered_cases if item.backordered_cases > 0 else item.quantity_cases
 
-            # 1. Check Available Stock
             available_stock = StockService.check_available_stock(
                 db, from_entity_type, order.from_entity_id, item.product_id, item.batch_number
             )
 
-            # 2. Calculate Partial Dispatch
             dispatch_qty = min(qty_to_fulfill, available_stock)
             backorder_qty = qty_to_fulfill - dispatch_qty
 
@@ -56,7 +52,6 @@ class OrderService:
 
             actual_items_dispatched += 1
 
-            # 3. Calculate Pricing & Trade Schemes
             product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
             final_price, free_qty = PricingService.calculate_item_pricing(
                 db, product.id, product.base_price, dispatch_qty
@@ -65,13 +60,11 @@ class OrderService:
             if (dispatch_qty + free_qty) > available_stock:
                 free_qty = available_stock - dispatch_qty
 
-                # CHANGE 2: Convert GST math to Decimal to prevent TypeError
             gst_multiplier = Decimal("1") + (Decimal(str(product.gst_percent)) / Decimal("100"))
             amount = Decimal(str(dispatch_qty)) * final_price * gst_multiplier
 
             total_invoice_amount += amount
 
-            # Update DB Item Status
             item.dispatched_cases += dispatch_qty
             item.backordered_cases = backorder_qty
             item.free_cases += free_qty
@@ -95,7 +88,6 @@ class OrderService:
         if actual_items_dispatched == 0:
             raise HTTPException(status_code=400, detail="Insufficient stock for all items. Order is fully backordered.")
 
-        # 6. Generate Financials
         invoice_num = f"INV-{order.order_number}-{datetime.now().strftime('%M%S')}"
         invoice = PrimaryInvoice(
             primary_order_id=order.id, invoice_number=invoice_num,
@@ -108,7 +100,6 @@ class OrderService:
             trans_type="INVOICE", amount=total_invoice_amount, ref_doc=invoice_num
         )
 
-        # 7. Create Shipment / Logistics Tracking
         shipment = Shipment(
             primary_order_id=order.id,
             transporter_name=dispatch_data.transporter_name,
@@ -119,7 +110,6 @@ class OrderService:
         )
         db.add(shipment)
 
-        # 8. Update Header Status
         order.status = "Dispatched" if is_completely_fulfilled else "Partially Dispatched"
         db.commit()
 
@@ -143,37 +133,32 @@ class OrderService:
         from_entity_type, to_entity_type = OrderService.get_routing_entities(order.type)
 
         for item in order.items:
-            # FIX: Calculate exactly what was physically sent (Paid + Free)
             actual_received_qty = item.dispatched_cases + item.free_cases
 
-            # Only process if something was actually dispatched for this item
             if actual_received_qty > 0:
-                # 1. Deduct exact physical qty from In-Transit
                 StockService.update_stock(
                     db=db,
                     entity_type="InTransit",
                     entity_id=order.id,
                     product_id=item.product_id,
-                    batch_number=item.batch_number,  # Ensure batch_number is passed
+                    batch_number=item.batch_number,
                     qty_change=-actual_received_qty,
                     ref_doc=order.order_number,
                     trans_type="RECEIPT_OUT_TRANSIT"
                 )
 
-                # 2. Add exact physical qty to the destination (SS or Distributor)
                 StockService.update_stock(
                     db=db,
                     entity_type=to_entity_type,
                     entity_id=order.to_entity_id,
                     product_id=item.product_id,
-                    batch_number=item.batch_number,  # Ensure batch_number is passed
+                    batch_number=item.batch_number,
                     qty_change=actual_received_qty,
                     ref_doc=order.order_number,
                     trans_type=f"RECEIPT_IN_{to_entity_type.upper()}"
                 )
 
-        # Only mark as fully "Received" if there are no more backorders
-        # Otherwise, you might want a "Partially Received" status
+
         order.status = "Received"
         db.commit()
         return {"message": f"Stock successfully delivered to {to_entity_type}."}

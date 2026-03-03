@@ -71,8 +71,8 @@ class PrimaryOrderRead(BaseModel):
     id: int
     order_number: str
     status: str
-    type: str                           # <--- ADD THIS
-    from_entity_id: int                 # <--- ADD THIS
+    type: str
+    from_entity_id: int
     ss_id: Optional[int] = None
     to_entity_id: Optional[int] = None
     items: List[OrderItemRead] = []

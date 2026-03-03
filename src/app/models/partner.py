@@ -14,7 +14,6 @@ class SuperStockist(Base):
     gstin = Column(String(15), unique=True)
     is_active = Column(Boolean, default=True)
 
-    # FIXED: Pointing to 'zone.id' instead of 'zones.id'
     zone_id = Column(Integer, ForeignKey("zone.id"))
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
 
@@ -37,7 +36,6 @@ class Distributor(Base):
     gstin = Column(String(15), unique=True)
     is_active = Column(Boolean, default=True)
 
-    # FIXED: Pointing to singular table names
     zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
     state_id = Column(Integer, ForeignKey("state.id"))
 
@@ -66,7 +64,6 @@ class Retailer(Base):
     gstin = Column(String(15), unique=True, nullable=True)
     is_active = Column(Boolean, default=True)
 
-    # FIXED: Pointing to singular table names
     zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
     state_id = Column(Integer, ForeignKey("state.id"), nullable=True)
     region_id = Column(Integer, ForeignKey("region.id"), nullable=True)

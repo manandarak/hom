@@ -25,9 +25,6 @@ from src.app.crud.geography import (
 
 router = APIRouter()
 
-# ==========================================
-# ZONES
-# ==========================================
 @router.get("/zones", response_model=list[ZoneRead])
 def list_zones(
     db: Session = Depends(get_db),
@@ -80,7 +77,6 @@ def delete_zone(
         db.commit()
     except IntegrityError:
         db.rollback()
-        # This catches the error if States or ZSMs are still linked to this Zone!
         raise HTTPException(
             status_code=400,
             detail="Cannot delete Zone. It is currently assigned to active States, Super Stockists, or Users."
@@ -88,9 +84,6 @@ def delete_zone(
     return None
 
 
-# ==========================================
-# STATES
-# ==========================================
 @router.post("/states", response_model=StateRead, status_code=status.HTTP_201_CREATED)
 def create_new_state(
     state: StateCreate,
@@ -109,9 +102,6 @@ def list_states_in_zone(
     return get_states_by_zone(db, zone_id)
 
 
-# ==========================================
-# REGIONS
-# ==========================================
 @router.post("/regions", response_model=RegionRead, status_code=status.HTTP_201_CREATED)
 def create_new_region(
     region: RegionCreate,
@@ -130,9 +120,6 @@ def list_regions_in_state(
     return get_regions_by_state(db, state_id)
 
 
-# ==========================================
-# AREAS
-# ==========================================
 @router.post("/areas", response_model=AreaRead, status_code=status.HTTP_201_CREATED)
 def create_new_area(
     area: AreaCreate,
@@ -151,9 +138,7 @@ def list_areas_in_region(
     return get_areas_by_region(db, region_id)
 
 
-# ==========================================
-# TERRITORIES
-# ==========================================
+
 @router.post("/territories", response_model=TerritoryRead, status_code=status.HTTP_201_CREATED)
 def create_territory(
     territory_input: TerritoryCreate,

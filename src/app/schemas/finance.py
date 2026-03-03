@@ -4,10 +4,10 @@ from datetime import datetime
 from typing import Optional
 
 class PaymentCreate(BaseModel):
-    party_type: str  # SuperStockist, Distributor, Retailer
+    party_type: str
     party_id: int
     amount: float
-    reference_document: str # e.g. "NEFT-TXN-123456"
+    reference_document: str
     payment_mode: Optional[str] = "Bank Transfer"
 
 class FinancialLedgerRead(BaseModel):

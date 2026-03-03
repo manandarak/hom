@@ -1,83 +1,96 @@
 from sqlalchemy.orm import Session
-from src.app.models.user import User, Role, Permission
-from src.app.schemas.user import UserCreate, RoleCreate
 from passlib.context import CryptContext
-
+from src.app.models.user import User
+from src.app.schemas.user import UserCreate, UserUpdate
+from src.app.models.geography import Territory, Area, Region, State
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def get_user_by_username(db: Session, username: str):
-    return db.query(User).filter(User.username == username).first()
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
 
 
-def get_users_by_role(db: Session, role_id: int):
-    return db.query(User).filter(User.role_id == role_id).all()
+def create_user(db: Session, user: UserCreate):
+    hashed_password = get_password_hash(user.password)
+    user_data = user.model_dump()
+    user_data["password_hash"] = hashed_password
+    del user_data["password"]
 
+    # --- CRITICAL FIX: Backend Auto-Stamping for Users ---
+    # Ensures that even if created via an external API with just a territory,
+    # the user still inherits the full geographic chain for Permissions.
+    if user_data.get("assigned_territory_id"):
+        territory = db.query(Territory).filter(Territory.id == user_data["assigned_territory_id"]).first()
+        if territory:
+            user_data["assigned_area_id"] = territory.area_id
+            area = db.query(Area).filter(Area.id == territory.area_id).first()
+            if area:
+                user_data["assigned_region_id"] = area.region_id
+                region = db.query(Region).filter(Region.id == area.region_id).first()
+                if region:
+                    user_data["assigned_state_id"] = region.state_id
+                    state = db.query(State).filter(State.id == region.state_id).first()
+                    if state:
+                        user_data["assigned_zone_id"] = state.zone_id
 
-def create_user(db: Session, user_in: UserCreate):
-    hashed_password = pwd_context.hash(user_in.password)
-
-    db_user = User(
-        username=user_in.username,
-        password_hash=hashed_password,
-        is_active=user_in.is_active,
-        role_id=user_in.role_id,
-        assigned_zone_id=user_in.assigned_zone_id,
-        assigned_region_id=user_in.assigned_region_id,
-        assigned_area_id=user_in.assigned_area_id,
-        assigned_territory_id=user_in.assigned_territory_id,
-        assigned_state_id = user_in.assigned_state_id
-    )
-
+    db_user = User(**user_data)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
 
 
-def get_roles(db: Session):
-    return db.query(Role).all()
+def get_user_by_username(db: Session, username: str):
+    return db.query(User).filter(User.username == username).first()
 
 
-def update_user_status(db: Session, user_id: int, active_status: bool):
+def get_user_by_email(db: Session, email: str):
+    return db.query(User).filter(User.email == email).first()
+
+
+def get_users(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(User).offset(skip).limit(limit).all()
+
+
+def update_user(db: Session, user_id: int, user_in: UserUpdate):
     db_user = db.query(User).filter(User.id == user_id).first()
-    if db_user:
-        db_user.is_active = active_status
-        db.commit()
+    if not db_user:
+        return None
+
+    update_data = user_in.model_dump(exclude_unset=True)
+
+    if "password" in update_data:
+        update_data["password_hash"] = get_password_hash(update_data["password"])
+        del update_data["password"]
+
+    # --- Update Geography Stamping if Territory Changes ---
+    if update_data.get("assigned_territory_id"):
+        territory = db.query(Territory).filter(Territory.id == update_data["assigned_territory_id"]).first()
+        if territory:
+            update_data["assigned_area_id"] = territory.area_id
+            area = db.query(Area).filter(Area.id == territory.area_id).first()
+            if area:
+                update_data["assigned_region_id"] = area.region_id
+                region = db.query(Region).filter(Region.id == area.region_id).first()
+                if region:
+                    update_data["assigned_state_id"] = region.state_id
+                    state = db.query(State).filter(State.id == region.state_id).first()
+                    if state:
+                        update_data["assigned_zone_id"] = state.zone_id
+
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+
+    db.commit()
+    db.refresh(db_user)
     return db_user
 
 
-def get_all_permissions(db: Session):
-    return db.query(Permission).all()
-
-
-def create_role(db: Session, role_in: RoleCreate):
-    db_role = Role(name=role_in.name)
-    db.add(db_role)
-    db.commit()
-    db.refresh(db_role)
-    return db_role
-
-
-def update_role_permissions(db: Session, role_id: int, permission_ids: list[int]):
-    role = db.query(Role).filter(Role.id == role_id).first()
-    if not role:
-        return None
-
-    permissions = db.query(Permission).filter(Permission.id.in_(permission_ids)).all()
-
-    allowed_admin_roles = ["Admin"]
-    admin_only_permissions = ["manage_users", "manage_roles", "manage_system"]
-
-    if role.name not in allowed_admin_roles:
-        for p in permissions:
-            if p.name in admin_only_permissions:
-                raise ValueError(
-                    f"Security Violation: Role '{role.name}' is not authorized for global permission '{p.name}'."
-                )
-
-    role.permissions = permissions
-    db.commit()
-    db.refresh(role)
-    return role
+def delete_user(db: Session, user_id: int):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if db_user:
+        db_user.is_active = False  # Soft delete
+        db.commit()
+        return True
+    return False

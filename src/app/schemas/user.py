@@ -6,7 +6,6 @@ class UserBase(BaseModel):
     is_active: bool = True
     email : Optional[str] = None
     phone_number: Optional[str] = None
-    # Safely allow nulls from the database
     role_id: Optional[int] = None
     assigned_zone_id: Optional[int] = None
     assigned_region_id: Optional[int] = None
@@ -16,7 +15,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    role_id: int  # Required when explicitly creating a NEW user
+    role_id: int
 
 class UserRead(UserBase):
     id: int
