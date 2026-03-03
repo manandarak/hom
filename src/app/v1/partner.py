@@ -20,7 +20,6 @@ from src.app.crud.partner import (
 
 router = APIRouter()
 
-
 # ==========================================
 # SUPER STOCKISTS
 # ==========================================
@@ -51,7 +50,7 @@ def list_super_stockists(
         dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if dist and dist.parent_ss_id:
             return query.filter(SuperStockist.id == dist.parent_ss_id).all()
-        # CRITICAL FIX: Secure Open Market Fallback
+        # Secure Open Market Fallback
         if dist and dist.zone_id:
             return query.filter(SuperStockist.zone_id == dist.zone_id).all()
         return []  # Fail closed if no geo mapping
@@ -69,6 +68,9 @@ def update_super_stockist(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
+    # CRITICAL FIX: Verify Geography Jurisdiction
+    PermissionService.verify_internal_jurisdiction(db, current_user, SuperStockist, ss_id)
+
     db_ss = db.query(SuperStockist).filter(SuperStockist.id == ss_id).first()
     if not db_ss:
         raise HTTPException(status_code=404, detail="Super Stockist not found")
@@ -88,6 +90,9 @@ def delete_super_stockist(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
+    # CRITICAL FIX: Verify Geography Jurisdiction
+    PermissionService.verify_internal_jurisdiction(db, current_user, SuperStockist, ss_id)
+
     db_ss = db.query(SuperStockist).filter(SuperStockist.id == ss_id).first()
     if not db_ss:
         raise HTTPException(status_code=404, detail="Super Stockist not found")
@@ -97,6 +102,9 @@ def delete_super_stockist(
 
 
 
+# ==========================================
+# DISTRIBUTORS
+# ==========================================
 @router.post("/distributors", response_model=DistributorRead, status_code=status.HTTP_201_CREATED)
 def add_distributor(
         dist_in: DistributorCreate,
@@ -126,7 +134,7 @@ def list_distributors(
         ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
         if ret and ret.linked_distributor_id:
             return query.filter(Distributor.id == ret.linked_distributor_id).all()
-        # CRITICAL FIX: Secure Open Market Fallback
+        # Secure Open Market Fallback
         if ret and ret.state_id:
             return query.filter(Distributor.state_id == ret.state_id).all()
         return []  # Fail closed
@@ -142,6 +150,9 @@ def update_distributor(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
+    # CRITICAL FIX: Verify Geography Jurisdiction
+    PermissionService.verify_internal_jurisdiction(db, current_user, Distributor, dist_id)
+
     db_dist = db.query(Distributor).filter(Distributor.id == dist_id).first()
     if not db_dist:
         raise HTTPException(status_code=404, detail="Distributor not found")
@@ -167,6 +178,9 @@ def delete_distributor(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
+    # CRITICAL FIX: Verify Geography Jurisdiction
+    PermissionService.verify_internal_jurisdiction(db, current_user, Distributor, dist_id)
+
     db_dist = db.query(Distributor).filter(Distributor.id == dist_id).first()
     if not db_dist:
         raise HTTPException(status_code=404, detail="Distributor not found")
@@ -217,8 +231,9 @@ def update_retailer(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-
+    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, Retailer, ret_id)
+
     retailer = db.query(Retailer).filter(Retailer.id == ret_id).first()
     if not retailer:
         raise HTTPException(status_code=404, detail="Retailer not found")
@@ -253,6 +268,9 @@ def delete_retailer(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
+    # CRITICAL FIX: Verify Geography Jurisdiction
+    PermissionService.verify_internal_jurisdiction(db, current_user, Retailer, ret_id)
+
     db_ret = db.query(Retailer).filter(Retailer.id == ret_id).first()
     if not db_ret:
         raise HTTPException(status_code=404, detail="Retailer not found")
