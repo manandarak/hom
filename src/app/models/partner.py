@@ -14,7 +14,8 @@ class SuperStockist(Base):
     gstin = Column(String(15), unique=True)
     is_active = Column(Boolean, default=True)
 
-    zone_id = Column(Integer, ForeignKey("zones.id"))
+    # FIXED: Pointing to 'zone.id' instead of 'zones.id'
+    zone_id = Column(Integer, ForeignKey("zone.id"))
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
 
     outstanding_balance = Column(DECIMAL(12, 2), default=0.00)
@@ -36,8 +37,9 @@ class Distributor(Base):
     gstin = Column(String(15), unique=True)
     is_active = Column(Boolean, default=True)
 
-    zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)
-    state_id = Column(Integer, ForeignKey("states.id"))
+    # FIXED: Pointing to singular table names
+    zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
+    state_id = Column(Integer, ForeignKey("state.id"))
 
     parent_ss_id = Column(Integer, ForeignKey("super_stockists.id"), nullable=True)
     is_direct_party = Column(Boolean, default=False)
@@ -64,11 +66,12 @@ class Retailer(Base):
     gstin = Column(String(15), unique=True, nullable=True)
     is_active = Column(Boolean, default=True)
 
-    zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)
-    state_id = Column(Integer, ForeignKey("states.id"), nullable=True)
-    region_id = Column(Integer, ForeignKey("regions.id"), nullable=True)
-    area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
-    territory_id = Column(Integer, ForeignKey("territories.id"))
+    # FIXED: Pointing to singular table names
+    zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
+    state_id = Column(Integer, ForeignKey("state.id"), nullable=True)
+    region_id = Column(Integer, ForeignKey("region.id"), nullable=True)
+    area_id = Column(Integer, ForeignKey("area.id"), nullable=True)
+    territory_id = Column(Integer, ForeignKey("territory.id"))
 
     linked_distributor_id = Column(Integer, ForeignKey("distributors.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)

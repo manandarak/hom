@@ -12,11 +12,12 @@ from src.app.services.permission_service import PermissionService
 
 router = APIRouter()
 
+
 @router.post("/payments", status_code=status.HTTP_201_CREATED)
 def receive_payment(
-    payment_in: PaymentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("manage_payments"))
+        payment_in: PaymentCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_payments"))
 ):
     """Logs a payment received from a partner and reduces their outstanding balance."""
     try:
@@ -46,10 +47,10 @@ def receive_payment(
 
 @router.get("/ledger/{party_type}/{party_id}", response_model=list[FinancialLedgerRead])
 def get_party_ledger(
-    party_type: str,
-    party_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("view_ledgers"))
+        party_type: str,
+        party_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("view_ledgers"))
 ):
     """Fetches the financial history/statement of account for a specific partner."""
     return db.query(FinancialLedger).filter(
@@ -60,31 +61,40 @@ def get_party_ledger(
 
 @router.get("/summary", summary="Get Scoped Finance Summary")
 def get_company_finance_summary(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permissions("view_ledgers"))
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("view_ledgers"))
 ):
     """Calculates receivables and recent transactions scoped to the user's hierarchy."""
 
-    scope = PermissionService.get_geo_scope(current_user)
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = "manage_roles" in user_perms
 
     # Base queries for outstanding balances
     ss_query = db.query(func.sum(SuperStockist.outstanding_balance))
     dist_query = db.query(func.sum(Distributor.outstanding_balance))
     ret_query = db.query(func.sum(Retailer.outstanding_balance))
 
+    # Base query for allowed partner IDs
+    ss_id_query = db.query(SuperStockist.id)
+    dist_id_query = db.query(Distributor.id)
+    ret_id_query = db.query(Retailer.id)
+
     ledger_query = db.query(FinancialLedger)
-    if scope and "id" not in scope and (current_user.role.name if current_user.role else "") != "Admin":
-        for key, value in scope.items():
-            if value is not None:
-                if hasattr(SuperStockist, key): ss_query = ss_query.filter(getattr(SuperStockist, key) == value)
-                if hasattr(Distributor, key): dist_query = dist_query.filter(getattr(Distributor, key) == value)
-                if hasattr(Retailer, key): ret_query = ret_query.filter(getattr(Retailer, key) == value)
 
-        allowed_ss = [s[0] for s in db.query(SuperStockist.id).filter_by(**scope).all()] if hasattr(SuperStockist, list(scope.keys())[0] if scope else "") else []
-        allowed_dist = [d[0] for d in db.query(Distributor.id).filter_by(**scope).all()] if hasattr(Distributor, list(scope.keys())[0] if scope else "") else []
-        allowed_ret = [r[0] for r in db.query(Retailer.id).filter_by(**scope).all()] if hasattr(Retailer, list(scope.keys())[0] if scope else "") else []
+    # Apply Smart Cascade if not admin
+    if not is_admin:
+        # Secure the scalar aggregations
+        ss_query = PermissionService.apply_geo_filter(ss_query, SuperStockist, current_user)
+        dist_query = PermissionService.apply_geo_filter(dist_query, Distributor, current_user)
+        ret_query = PermissionService.apply_geo_filter(ret_query, Retailer, current_user)
 
-        # FIXED: Using and_ / or_ correctly for SQLAlchemy queries
+        # Secure the allowed ID lists
+        allowed_ss = [s[0] for s in PermissionService.apply_geo_filter(ss_id_query, SuperStockist, current_user).all()]
+        allowed_dist = [d[0] for d in
+                        PermissionService.apply_geo_filter(dist_id_query, Distributor, current_user).all()]
+        allowed_ret = [r[0] for r in PermissionService.apply_geo_filter(ret_id_query, Retailer, current_user).all()]
+
+        # Filter the ledger by the strictly allowed IDs
         ledger_query = ledger_query.filter(
             or_(
                 and_(FinancialLedger.party_type == "SuperStockist", FinancialLedger.party_id.in_(allowed_ss)),
