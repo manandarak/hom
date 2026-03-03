@@ -9,13 +9,15 @@ from src.app.schemas.orders import PrimaryOrderCreate, PrimaryOrderRead, Dispatc
 from src.app.crud.primary_sales import create_primary_order
 from src.app.services.order_service import OrderService
 from src.app.services.permission_service import PermissionService
+from src.app.core.security import check_permissions
+
 
 router = APIRouter()
 
 @router.get("/", response_model=list[PrimaryOrderRead])
 def get_all_primary_orders(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(check_permissions("create_primary_order")),
 ):
     """Fetch primary orders filtered dynamically based on user role and hierarchy."""
     query = db.query(PrimaryOrder)
@@ -26,11 +28,9 @@ def get_all_primary_orders(
     role_name = current_user.role.name
     scope = PermissionService.get_geo_scope(current_user)
 
-    # 1. Admin gets everything
     if role_name == "Admin":
         return query.order_by(PrimaryOrder.id.desc()).all()
 
-    # 2. Partners strictly see their own entity's orders
     if role_name == "SuperStockist":
         ss = db.query(SuperStockist).filter(SuperStockist.user_id == current_user.id).first()
         if ss:
@@ -44,11 +44,9 @@ def get_all_primary_orders(
         return query.order_by(PrimaryOrder.id.desc()).all()
 
     elif role_name == "Retailer":
-        return [] # Retailers don't deal with primary sales
+        return []
 
-    # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     if scope and "id" not in scope:
-        # THE FAT TABLE FIX: No more joins! The order has the geographic IDs stamped on it.
         query = query.filter_by(**scope)
 
     return query.order_by(PrimaryOrder.id.desc()).all()
@@ -74,7 +72,7 @@ def place_primary_order(order_in: PrimaryOrderCreate, db: Session = Depends(get_
 
 
 @router.post("/{order_id}/dispatch")
-def dispatch_order(order_id: int, dispatch_data: DispatchPayload, db: Session = Depends(get_db)):
+def dispatch_order(order_id: int, dispatch_data: DispatchPayload, db: Session = Depends(get_db),current_user: User = Depends(check_permissions("dispatch_order"))):
     """Dispatches a primary order with partial fulfillment and logistics tracking."""
     try:
         result = OrderService.dispatch_primary_order(db, order_id, dispatch_data)
@@ -85,7 +83,7 @@ def dispatch_order(order_id: int, dispatch_data: DispatchPayload, db: Session = 
 
 
 @router.post("/{order_id}/receive")
-def receive_order(order_id: int, db: Session = Depends(get_db)):
+def receive_order(order_id: int, db: Session = Depends(get_db),current_user: User = Depends(check_permissions("receive_order"))):
     """
     Moves stock from In-Transit Inventory to the Super Stockist.
     Updates status to 'Received'.
@@ -94,7 +92,7 @@ def receive_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
-def cancel_primary_order(order_id: int, db: Session = Depends(get_db)):
+def cancel_primary_order(order_id: int, db: Session = Depends(get_db),current_user: User = Depends(check_permissions("cancel_order"))):
     """Cancels a primary order if it has not been dispatched yet."""
     order = db.query(PrimaryOrder).filter(PrimaryOrder.id == order_id).first()
 

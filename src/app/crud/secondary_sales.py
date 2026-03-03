@@ -5,11 +5,9 @@ from src.app.models.geography import Territory, Area, Region, State
 
 
 def create_secondary_order(db: Session, retailer_id: int, distributor_id: int, items_in: list, total_amount: float):
-    # 1. Fetch the partners
     distributor = db.query(Distributor).filter(Distributor.id == distributor_id).first()
     retailer = db.query(Retailer).filter(Retailer.id == retailer_id).first()
 
-    # 2. Walk up the Geographic Chain based on the Retailer's Territory
     territory_id = retailer.territory_id if retailer else None
     area_id = None
     region_id = None
@@ -30,19 +28,16 @@ def create_secondary_order(db: Session, retailer_id: int, distributor_id: int, i
                     if state:
                         zone_id = state.zone_id
     elif state_id:
-        # Fallback just in case retailer has no territory, but distributor has a state
         state = db.query(State).filter(State.id == state_id).first()
         if state:
             zone_id = state.zone_id
 
-    # 3. Create and Stamp the Order
     db_order = SecondaryOrder(
         retailer_id=retailer_id,
         distributor_id=distributor_id,
         total_amount=total_amount,
         status="Pending",
 
-        # --- THE GEOGRAPHIC STAMP ---
         zone_id=zone_id,
         state_id=state_id,
         region_id=region_id,

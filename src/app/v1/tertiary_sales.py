@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.app.core.database import get_db
-from src.app.core.security import get_current_user
+from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.models.sales_tertiary import TertiaryOrder
 from src.app.models.partner import Retailer
@@ -27,8 +27,19 @@ router = APIRouter()
 
 
 @router.get("/")
-def get_all_tertiary_orders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_all_tertiary_orders(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
     """Fetch Tertiary Orders scoped dynamically based on user role and geography."""
+    # SECURED: Ensure they have at least one viewing permission
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = current_user.role.name == "Admin" if current_user.role else False
+
+    if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Security Clearance Denied. Requires order viewing permission.")
+
     query = db.query(TertiaryOrder)
 
     if not current_user.role:
@@ -36,8 +47,8 @@ def get_all_tertiary_orders(db: Session = Depends(get_db), current_user: User = 
 
     role_name = current_user.role.name
 
-    # 1. Admin gets everything
-    if role_name == "Admin":
+    # 1. Admin / Global Viewers get everything
+    if role_name == "Admin" or "view_all_orders" in user_perms:
         return query.order_by(TertiaryOrder.id.desc()).all()
 
     # 2. Partners strictly see ONLY their own firm's orders
@@ -62,8 +73,13 @@ def get_all_tertiary_orders(db: Session = Depends(get_db), current_user: User = 
 
         return query.order_by(TertiaryOrder.id.desc()).all()
 
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def record_tertiary_sale(sale_in: TertiaryOrderCreate, db: Session = Depends(get_db)):
+def record_tertiary_sale(
+        sale_in: TertiaryOrderCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("create_tertiary_order"))
+):
     """
     Consumer or Retailer logs a sale.
     This is just a 'request' until approved by the Sales Officer (SO).
@@ -73,13 +89,27 @@ def record_tertiary_sale(sale_in: TertiaryOrderCreate, db: Session = Depends(get
 
 
 @router.get("/so/{so_id}/pending")
-def get_pending_requests(so_id: int, db: Session = Depends(get_db)):
+def get_pending_requests(
+        so_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
     """Fetch pending sales for a specific Sales Officer to review."""
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = current_user.role.name == "Admin" if current_user.role else False
+
+    if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Security Clearance Denied.")
+
     return get_tertiary_orders_by_so(db, so_id)
 
 
 @router.patch("/{order_id}/approve")
-def approve_tertiary_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def approve_tertiary_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("approve_order"))
+):
     """
     Approves the sale and DEDUCTS stock from the Retailer. Only permitted SO can execute.
     """
@@ -91,23 +121,41 @@ def get_my_pending_requests(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = current_user.role.name == "Admin" if current_user.role else False
+
+    if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Security Clearance Denied.")
+
     # Updated to use the new get_geo_scope instead of get_user_data_scope
     scope_filter = PermissionService.get_geo_scope(current_user)
     return get_scoped_pending_orders(db, scope_filter)
 
 
 @router.post("/consumers", response_model=EndConsumerRead, status_code=status.HTTP_201_CREATED)
-def register_end_consumer(consumer_in: EndConsumerCreate, db: Session = Depends(get_db)):
+def register_end_consumer(
+        consumer_in: EndConsumerCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_partners"))
+):
     return create_end_consumer(db, consumer_in)
 
 
 @router.get("/consumers", response_model=list[EndConsumerRead])
-def list_end_consumers(db: Session = Depends(get_db)):
+def list_end_consumers(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("view_partners"))
+):
     return get_end_consumers(db)
 
 
 @router.patch("/consumers/{consumer_id}", response_model=EndConsumerRead)
-def modify_end_consumer(consumer_id: int, consumer_in: EndConsumerUpdate, db: Session = Depends(get_db)):
+def modify_end_consumer(
+        consumer_id: int,
+        consumer_in: EndConsumerUpdate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_partners"))
+):
     updated = update_end_consumer(db, consumer_id, consumer_in)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="End Consumer not found")
@@ -115,7 +163,11 @@ def modify_end_consumer(consumer_id: int, consumer_in: EndConsumerUpdate, db: Se
 
 
 @router.delete("/consumers/{consumer_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_end_consumer(consumer_id: int, db: Session = Depends(get_db)):
+def remove_end_consumer(
+        consumer_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("manage_partners"))
+):
     success = delete_end_consumer(db, consumer_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="End Consumer not found")
@@ -123,7 +175,11 @@ def remove_end_consumer(consumer_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
-def cancel_tertiary_order(order_id: int, db: Session = Depends(get_db)):
+def cancel_tertiary_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("cancel_order"))
+):
     """Cancels a tertiary order if it is still pending."""
     order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
 
@@ -142,7 +198,12 @@ def cancel_tertiary_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{order_id}", status_code=status.HTTP_200_OK)
-def update_tertiary_order(order_id: int, update_in: TertiaryOrderCreate, db: Session = Depends(get_db)):
+def update_tertiary_order(
+        order_id: int,
+        update_in: TertiaryOrderCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(check_permissions("update_order"))
+):
     """Updates the tertiary order before fulfillment."""
     order = db.query(TertiaryOrder).filter(TertiaryOrder.id == order_id).first()
 

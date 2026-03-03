@@ -1,10 +1,10 @@
 HOM Backend - Codebase Documentation
 ===================================
 
-This project follows a modular monolith architecture using FastAPI.
+``This project follows a modular monolith architecture using FastAPI.
 
 Root Level Files
-----------------
+``----------------
 
 .env
 - Stores environment variables (secrets & config).

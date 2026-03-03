@@ -1,21 +1,22 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
-from src.app.core.config import settings
+from sqlalchemy import or_
 from src.app.core.security import verify_password, create_access_token
-from src.app.crud.user import get_user_by_username
-
+from src.app.models.user import User
 
 class AuthService:
     @staticmethod
-    def authenticate_user(db: Session, username: str, password: str):
-        user = get_user_by_username(db, username)
+    def authenticate_user(db: Session, login_id: str, password: str):
+        # Now 'User' is recognized
+        user = db.query(User).filter(
+            or_(User.username == login_id, User.email == login_id)
+        ).first()
+
         if not user or not verify_password(password, user.password_hash):
             return None
         return user
 
     @staticmethod
     def generate_token(user_username: str):
-        # This calls the function you imported from security.py
-        # Make sure the parameter name matches (subject vs data)
         return create_access_token(subject=user_username)

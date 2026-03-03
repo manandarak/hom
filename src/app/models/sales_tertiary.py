@@ -5,9 +5,9 @@ from src.app.core.database import Base
 class EndConsumer(Base):
     __tablename__ = "end_consumer"
     id = Column(Integer, primary_key=True, index=True)
-    territory_id = Column(Integer, ForeignKey("territory.id"))  # Fixed typo here!
+    territory_id = Column(Integer, ForeignKey("territory.id"))
     name = Column(String(255))
-    type = Column(String(50))  # e.g., "Barber"
+    type = Column(String(50))
     mobile_number = Column(String(15))
     is_active = Column(Boolean, default=True)
     contact_person = Column(String(50), nullable=True)

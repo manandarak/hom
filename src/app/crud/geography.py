@@ -1,6 +1,4 @@
 from sqlalchemy.orm import Session
-from src.app.models.geography import Zone, Territory
-from src.app.schemas.geography import TerritoryCreate, ZoneCreate
 from src.app.models.geography import Zone, State, Region, Area, Territory
 from src.app.schemas.geography import TerritoryCreate, ZoneCreate, StateCreate, RegionCreate, AreaCreate
 
@@ -51,7 +49,6 @@ def get_regions_by_state(db: Session, state_id: int):
     return db.query(Region).filter(Region.state_id == state_id).all()
 
 
-# --- AREA CRUD ---
 def create_area(db: Session, area: AreaCreate):
     db_area = Area(name=area.name, region_id=area.region_id)
     db.add(db_area)

@@ -15,12 +15,13 @@ class User(Base):
     __tablename__ = "users"
     id = Column(BigInteger, primary_key=True, index=True)
     username = Column(String(255), unique=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    phone_number = Column(String(20), unique=True, index=True, nullable=True)
     password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
 
     role_id = Column(Integer, ForeignKey("roles.id"))
 
-    # Hierarchy Scoping
     assigned_zone_id = Column(Integer, ForeignKey("zone.id"), nullable=True)
     assigned_region_id = Column(Integer, ForeignKey("region.id"), nullable=True)
     assigned_area_id = Column(Integer, ForeignKey("area.id"), nullable=True)
@@ -42,10 +43,8 @@ class Permission(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, index=True)
 
-    # ADDED THIS:
     description = Column(String(255), nullable=True)
 
-    # This attribute must be named "roles" if Role uses back_populates="roles"
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
 
 
@@ -55,8 +54,6 @@ class Role(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True)
 
-    # ADDED THIS:
     description = Column(String(255), nullable=True)
 
-    # This attribute "permissions" matches the back_populates in the Permission class
     permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")

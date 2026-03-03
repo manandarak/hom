@@ -7,14 +7,14 @@ class TradeScheme(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("product_master.id"), nullable=False)
-    scheme_name = Column(String(100), nullable=False)  # e.g., "Summer Mega Sale"
+    scheme_name = Column(String(100), nullable=False)
 
-    # The Triggers & Rewards
-    min_qty = Column(Integer, nullable=False)  # "Buy X..."
-    discount_percent = Column(DECIMAL(5, 2), default=0.00)  # "...get Y% off..."
-    free_qty = Column(Integer, default=0)  # "...and Z items free!"
 
-    # Validity
+    min_qty = Column(Integer, nullable=False)
+    discount_percent = Column(DECIMAL(5, 2), default=0.00)
+    free_qty = Column(Integer, default=0)
+
+
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)

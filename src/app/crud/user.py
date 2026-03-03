@@ -1,13 +1,9 @@
 from sqlalchemy.orm import Session
-from src.app.models.user import User, Role
-from src.app.schemas.user import UserCreate
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
 from src.app.models.user import User, Role, Permission
 from src.app.schemas.user import UserCreate, RoleCreate
 from passlib.context import CryptContext
 
-# Setup password hashing
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -81,7 +77,6 @@ def update_role_permissions(db: Session, role_id: int, permission_ids: list[int]
                     f"Security Violation: Role '{role.name}' is not authorized for global permission '{p.name}'."
                 )
 
-    # Update associations
     role.permissions = permissions
     db.commit()
     db.refresh(role)

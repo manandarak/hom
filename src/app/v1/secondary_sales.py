@@ -3,45 +3,51 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
-from src.app.core.security import get_current_user
+from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.services.permission_service import PermissionService
 from src.app.models.sales_secondary import SecondaryOrder, SecondaryOrderItems
 from src.app.models.partner import Retailer, Distributor
 from src.app.models.product import ProductMaster
-from src.app.schemas.orders import SecondaryOrderCreate
+from src.app.schemas.orders import SecondaryOrderCreate, SecondaryDispatchCreate, DispatchPayload
 from src.app.services.stock_service import StockService
 from src.app.services.finance_service import FinanceService
 from src.app.services.tax_service import TaxService
-from src.app.schemas.orders import SecondaryDispatchCreate
-from src.app.schemas.orders import SecondaryOrderCreate, DispatchPayload
 from src.app.models.geography import Territory, Area, Region, State
 
 router = APIRouter()
 
 
-@router.post("/", status_code=201)
-def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(get_db)):
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def record_secondary_sale(
+        sale_in: SecondaryOrderCreate,
+        db: Session = Depends(get_db),
+        # SECURED: Only users with create permission can place secondary orders
+        current_user: User = Depends(check_permissions("create_secondary_order"))
+):
     """Stage 1: Initialize order as PENDING."""
     try:
         retailer = db.query(Retailer).filter(Retailer.id == sale_in.retailer_id, Retailer.is_active == True).first()
         if not retailer:
             raise HTTPException(status_code=404, detail="Retailer not found.")
 
-        distributor = db.query(Distributor).filter(Distributor.id == sale_in.distributor_id, Distributor.is_active == True).first()
+        distributor = db.query(Distributor).filter(Distributor.id == sale_in.distributor_id,
+                                                   Distributor.is_active == True).first()
         if not distributor:
             raise HTTPException(status_code=404, detail="Distributor not found.")
 
-        # ... (Keep your existing GST mismatch and calculation logic here) ...
+        # (Existing GST mismatch and calculation logic)
         total_invoice_amount = Decimal("0.00")
         for item in sale_in.items:
             product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
             base_item_amount = Decimal(str(item.quantity)) * Decimal(str(product.base_price))
+            # Assuming retailer state is same as territory state for now, but fetched properly below
             tax_details = TaxService.calculate_gst(base_item_amount, Decimal(str(product.gst_percent)),
-                                                   distributor.state_id, retailer_state_id)
+                                                   distributor.state_id, retailer.state_id if hasattr(retailer,
+                                                                                                      'state_id') else distributor.state_id)
             total_invoice_amount += tax_details["final_amount"]
 
-        # --- NEW: WALK UP THE GEOGRAPHIC CHAIN ---
+        # --- WALK UP THE GEOGRAPHIC CHAIN ---
         territory_id = retailer.territory_id
         area_id = None
         region_id = None
@@ -61,8 +67,6 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
                         state = db.query(State).filter(State.id == state_id).first()
                         if state:
                             zone_id = state.zone_id
-
-        # --- END NEW ---
 
         # Now include the stamps when creating the order!
         db_order = SecondaryOrder(
@@ -97,7 +101,12 @@ def record_secondary_sale(sale_in: SecondaryOrderCreate, db: Session = Depends(g
 
 
 @router.patch("/{order_id}/approve", status_code=status.HTTP_200_OK)
-def approve_secondary_order(order_id: int, db: Session = Depends(get_db)):
+def approve_secondary_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        # SECURED: Only users with approve permission can accept orders
+        current_user: User = Depends(check_permissions("approve_order"))
+):
     """Stage 2: Distributor actively accepts the order."""
     order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
     if not order or order.status not in ["PENDING", "Pending"]:
@@ -109,7 +118,13 @@ def approve_secondary_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{order_id}/dispatch", status_code=status.HTTP_200_OK)
-def dispatch_secondary_order(order_id: int, payload: DispatchPayload, db: Session = Depends(get_db)):
+def dispatch_secondary_order(
+        order_id: int,
+        payload: DispatchPayload,
+        db: Session = Depends(get_db),
+        # SECURED: Only users with dispatch permission can send stock
+        current_user: User = Depends(check_permissions("dispatch_order"))
+):
     """Stage 3: Dispatch logs details, deducts sender stock, and creates financial debt."""
     try:
         order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
@@ -133,8 +148,14 @@ def dispatch_secondary_order(order_id: int, payload: DispatchPayload, db: Sessio
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/{order_id}/receive")
-def receive_secondary_order(order_id: int, db: Session = Depends(get_db)):
+def receive_secondary_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        # SECURED: Only users with receive permission can mark goods arrived
+        current_user: User = Depends(check_permissions("receive_order"))
+):
     """Stage 4: Retailer physically receives the goods (Adds to their stock)."""
     try:
         order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
@@ -158,7 +179,12 @@ def receive_secondary_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{order_id}/cancel", status_code=status.HTTP_200_OK)
-def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
+def cancel_secondary_order(
+        order_id: int,
+        db: Session = Depends(get_db),
+        # SECURED: Only users with cancel permission can revert orders
+        current_user: User = Depends(check_permissions("cancel_order"))
+):
     try:
         order = db.query(SecondaryOrder).filter(SecondaryOrder.id == order_id).first()
         if not order:
@@ -188,8 +214,17 @@ def cancel_secondary_order(order_id: int, db: Session = Depends(get_db)):
 @router.get("/")
 def get_all_secondary_orders(
         db: Session = Depends(get_db),
+        # SECURED: We let anyone in who has either view_own_orders or view_all_orders.
+        # If they have neither, they can't even hit the endpoint.
         current_user: User = Depends(get_current_user)
 ):
+    # Quick manual check to ensure they have at least one viewing permission
+    user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
+    is_admin = current_user.role.name == "Admin" if current_user.role else False
+
+    if not is_admin and "view_own_orders" not in user_perms and "view_all_orders" not in user_perms:
+        raise HTTPException(status_code=403, detail="Security Clearance Denied. Requires order viewing permission.")
+
     query = db.query(SecondaryOrder)
 
     if not current_user.role:
@@ -198,7 +233,7 @@ def get_all_secondary_orders(
     role_name = current_user.role.name
 
     # 1. Admin gets everything
-    if role_name == "Admin":
+    if role_name == "Admin" or "view_all_orders" in user_perms:
         pass
 
     # 2. Partners strictly see their own entity's orders (Fail-Closed)

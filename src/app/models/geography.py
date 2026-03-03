@@ -14,7 +14,6 @@ class State(Base):
     __tablename__ = 'state'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    # MUST match Zone.__tablename__
     zone_id = Column(Integer, ForeignKey("zone.id"))
 
     zone = relationship("Zone", back_populates="states")
@@ -22,10 +21,9 @@ class State(Base):
 
 
 class Region(Base):
-    __tablename__ = 'region'  # Changed from "regions" to "region"
+    __tablename__ = 'region'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    # MUST match State.__tablename__
     state_id = Column(Integer, ForeignKey("state.id"))
 
     state = relationship("State", back_populates="regions")
@@ -33,10 +31,9 @@ class Region(Base):
 
 
 class Area(Base):
-    __tablename__ = 'area'  # Changed from "areas" to "area"
+    __tablename__ = 'area'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    # MUST match Region.__tablename__
     region_id = Column(Integer, ForeignKey("region.id"))
 
     region = relationship("Region", back_populates="areas")
@@ -44,10 +41,8 @@ class Area(Base):
 
 
 class Territory(Base):
-    __tablename__ = 'territory'  # Changed from "territories" to "territory"
+    __tablename__ = 'territory'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    # MUST match Area.__tablename__
     area_id = Column(Integer, ForeignKey("area.id"))
-
     area = relationship("Area", back_populates="territories")

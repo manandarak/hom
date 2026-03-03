@@ -4,6 +4,8 @@ from typing import Optional, List
 class UserBase(BaseModel):
     username: str
     is_active: bool = True
+    email : Optional[str] = None
+    phone_number: Optional[str] = None
     # Safely allow nulls from the database
     role_id: Optional[int] = None
     assigned_zone_id: Optional[int] = None
@@ -23,6 +25,8 @@ class UserRead(UserBase):
 class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     role_id: Optional[int] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
     assigned_zone_id: Optional[int] = None
     assigned_region_id: Optional[int] = None
     assigned_area_id: Optional[int] = None

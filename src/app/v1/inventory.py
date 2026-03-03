@@ -1,28 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from src.app.core.database import get_db
-from src.app.core.security import get_current_user
+from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.models.partner import SuperStockist, Distributor, Retailer
 from src.app.services.permission_service import PermissionService
-from src.app.schemas.inventory import ProductionLogCreate, StockLedgerRead, StockUpdate
-from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory, RetailerInventory
+from src.app.schemas.inventory import ProductionLogCreate, StockLedgerRead, StockUpdate, FactoryCreate
+from src.app.models.inventory import DailyProductionLog, FactoryInventory, StockLedger, SSInventory, DistributorInventory, RetailerInventory, FactoryMaster
 from src.app.services.stock_service import StockService
-from src.app.models.inventory import FactoryMaster
-from src.app.schemas.inventory import FactoryCreate
+
 
 router = APIRouter()
 
 @router.get("/factory/{factory_id}")
-def get_factory_stock(factory_id: int, db: Session = Depends(get_db)):
+def get_factory_stock(
+    factory_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("view_inventory"))
+):
     stock = db.query(FactoryInventory).filter(FactoryInventory.factory_id == factory_id).all()
     return [{"product_id": s.product_id, "batch_number": s.batch_number, "current_stock": s.current_stock_qty} for s in stock]
 
-@router.post("/factory/produce", status_code=201)
-def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(get_db)):
-    try:
 
+@router.post("/factory/produce", status_code=status.HTTP_201_CREATED)
+def log_factory_production(
+    log_in: ProductionLogCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("manage_inventory"))
+):
+    try:
         production_log = DailyProductionLog(
             product_id=log_in.product_id,
             factory_id=log_in.factory_id,
@@ -51,14 +58,21 @@ def log_factory_production(log_in: ProductionLogCreate, db: Session = Depends(ge
 
 
 @router.get("/ss/{ss_id}")
-def get_ss_stock(ss_id: int, db: Session = Depends(get_db)):
+def get_ss_stock(
+    ss_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("view_inventory"))
+):
     """Fetches all stock sitting with a specific Super Stockist"""
     stock = db.query(SSInventory).filter(SSInventory.ss_id == ss_id).all()
     return [{"product_id": s.product_id, "batch_number": s.batch_number, "current_stock": s.current_stock_qty} for s in stock]
 
 
 @router.get("/ledger", response_model=list[StockLedgerRead])
-def get_stock_ledger(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_stock_ledger(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("view_inventory"))
+):
     """Fetch the master audit trail of all inventory movements securely scoped to the user."""
     query = db.query(StockLedger)
 
@@ -116,12 +130,13 @@ def get_stock_ledger(db: Session = Depends(get_db), current_user: User = Depends
     return query.order_by(StockLedger.created_at.desc()).limit(100).all()
 
 
-@router.post("/{entity_type}/{entity_id}/adjust", status_code=200)
+@router.post("/{entity_type}/{entity_id}/adjust", status_code=status.HTTP_200_OK)
 def adjust_stock(
-        entity_type: str,
-        entity_id: int,
-        update_in: StockUpdate,
-        db: Session = Depends(get_db)
+    entity_type: str,
+    entity_id: int,
+    update_in: StockUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("manage_inventory"))
 ):
     """
     Manual adjustment for shrinkage, damage, returns, or audit corrections.
@@ -155,7 +170,11 @@ def adjust_stock(
 
 
 @router.get("/distributor/{distributor_id}")
-def get_distributor_stock(distributor_id: int, db: Session = Depends(get_db)):
+def get_distributor_stock(
+    distributor_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("view_inventory"))
+):
     """Fetches all stock and batches sitting with a specific Distributor"""
     stock = db.query(DistributorInventory).filter(DistributorInventory.distributor_id == distributor_id).all()
 
@@ -169,8 +188,12 @@ def get_distributor_stock(distributor_id: int, db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/factories", status_code=201)
-def create_factory(factory_in: FactoryCreate, db: Session = Depends(get_db)):
+@router.post("/factories", status_code=status.HTTP_201_CREATED)
+def create_factory(
+    factory_in: FactoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("manage_inventory"))
+):
     """Registers a new manufacturing plant in the database."""
 
     # Note: Your FactoryMaster model has a 'batch_number' column that is not nullable.
@@ -189,11 +212,20 @@ def create_factory(factory_in: FactoryCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/factories")
-def get_all_factories(db: Session = Depends(get_db)):
+def get_all_factories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("view_inventory"))
+):
     """Fetches all registered plants."""
     return db.query(FactoryMaster).all()
+
+
 @router.get("/retailer/{retailer_id}")
-def get_retailer_stock(retailer_id: int, db: Session = Depends(get_db)):
+def get_retailer_stock(
+    retailer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permissions("view_inventory"))
+):
     """Fetches all stock and batches sitting with a specific Retailer"""
     stock = db.query(RetailerInventory).filter(RetailerInventory.retailer_id == retailer_id).all()
 

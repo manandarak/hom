@@ -59,6 +59,12 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated or suspended."
+        )
+
     return user
 
 
@@ -67,20 +73,17 @@ def check_permissions(required_permission: str):
         if not current_user.role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have a role assigned."
+                detail="Access denied: No security role assigned to this account."
             )
 
-        if current_user.role.name == "Admin":
+        user_permissions = [p.name for p in current_user.role.permissions] if current_user.role.permissions else []
+        if "manage_roles" in user_permissions:
             return current_user
-
-        user_permissions = []
-        if current_user.role.permissions:
-            user_permissions = [p.name for p in current_user.role.permissions]
 
         if required_permission not in user_permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"You do not have the required permission: '{required_permission}'"
+                detail=f"Security Clearance Denied. Missing required capability: '{required_permission}'"
             )
 
         return current_user

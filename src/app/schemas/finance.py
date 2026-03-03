@@ -17,7 +17,7 @@ class FinancialLedgerRead(BaseModel):
     party_id: int
     transaction_type: str
     reference_document: Optional[str]
-    debit_amount: Decimal
-    credit_amount: Decimal
-    closing_balance: Decimal
+    debit_amount: Decimal = Decimal("0.00")
+    credit_amount: Decimal = Decimal("0.00")
+    closing_balance: Decimal = Decimal("0.00")
     model_config = ConfigDict(from_attributes=True)

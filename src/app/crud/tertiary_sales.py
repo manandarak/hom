@@ -3,7 +3,6 @@ from src.app.models.sales_tertiary import TertiaryOrder, EndConsumer
 from src.app.schemas.orders import TertiaryOrderCreate
 from src.app.schemas.partner import EndConsumerCreate, EndConsumerUpdate
 from datetime import date
-from src.app.models.user import User
 from src.app.models.partner import Retailer
 from src.app.models.geography import Territory, Area, Region, State
 
@@ -11,10 +10,8 @@ from src.app.models.geography import Territory, Area, Region, State
 def create_tertiary_sale(db: Session, sale_in: TertiaryOrderCreate):
     """Creates a new tertiary sale record and stamps the full geography."""
 
-    # 1. Fetch the Retailer fulfilling the order
     retailer = db.query(Retailer).filter(Retailer.id == sale_in.fulfilled_by_retailer_id).first()
 
-    # 2. Walk up the Geographic Chain
     territory_id = retailer.territory_id if retailer else None
     area_id = None
     region_id = None
@@ -35,7 +32,6 @@ def create_tertiary_sale(db: Session, sale_in: TertiaryOrderCreate):
                     if state:
                         zone_id = state.zone_id
 
-    # 3. Create and Stamp the Order
     db_order = TertiaryOrder(
         end_consumer_id=sale_in.end_consumer_id,
         fulfilled_by_retailer_id=sale_in.fulfilled_by_retailer_id,
@@ -46,7 +42,6 @@ def create_tertiary_sale(db: Session, sale_in: TertiaryOrderCreate):
         request_date=date.today(),
         status="Pending",
 
-        # --- THE GEOGRAPHIC STAMP ---
         zone_id=zone_id,
         state_id=state_id,
         region_id=region_id,

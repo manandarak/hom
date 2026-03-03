@@ -5,10 +5,8 @@ from src.app.models.partner import SuperStockist
 
 
 def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
-    # 1. Fetch the target Super Stockist
     ss = db.query(SuperStockist).filter(SuperStockist.id == obj_in.to_entity_id).first()
 
-    # 2. Stamp the Order
     db_order = PrimaryOrder(
         order_number=obj_in.order_number,
         type=obj_in.type,
@@ -16,7 +14,6 @@ def create_primary_order(db: Session, obj_in: PrimaryOrderCreate):
         to_entity_id=obj_in.to_entity_id,
         status="Pending",
 
-        # --- THE GEOGRAPHIC STAMP ---
         zone_id=ss.zone_id if ss else None,
         state_id=None,
         region_id=None,

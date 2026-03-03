@@ -13,7 +13,6 @@ class PrimaryOrder(Base):
     to_entity_id = Column(Integer)
     status = Column(String(50), default="Pending")
 
-    # Virtual Elements (ORM Relationships)
     items = relationship("PrimaryOrderItems", back_populates="order")
     invoice = relationship("PrimaryInvoice", back_populates="order", uselist=False)
     shipment = relationship("Shipment", back_populates="order", uselist=False)

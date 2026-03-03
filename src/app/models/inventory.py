@@ -1,7 +1,5 @@
 from sqlalchemy import Column, Integer, String, DECIMAL, ForeignKey, BigInteger, DateTime, Date, func
-from sqlalchemy.orm import relationship
 from src.app.core.database import Base
-from datetime import datetime, date
 
 class StockLedger(Base):
     """The History of Truth - Every movement is recorded here"""
@@ -58,17 +56,13 @@ class FactoryMaster(Base):
     name = Column(String(100), nullable=False)
     location = Column(String(100))
     batch_number = Column(String(50), nullable=False)
-    # Add other columns if your MySQL table has them,
-    # but this is enough to satisfy the Foreign Key!
 
-
-# Add to src/app/models/inventory.py
 
 class InTransitInventory(Base):
     """Holds stock that has left the factory but hasn't reached the destination"""
     __tablename__ = "in_transit_inventory"
     id = Column(Integer, primary_key=True)
-    order_id = Column(BigInteger, index=True) # Ties directly to the Order ID
+    order_id = Column(BigInteger, index=True)
     product_id = Column(Integer, ForeignKey("product_master.id"))
     batch_number = Column(String(50), nullable=False)
     current_stock_qty = Column(Integer, default=0)
@@ -80,9 +74,6 @@ class DailyProductionLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("product_master.id"), nullable=False)
-
-    # Assuming from your screenshot you have a factory_master table.
-    # If not, you can remove the ForeignKey for now and just leave it as Integer.
     factory_id = Column(Integer, ForeignKey("factory_master.id"), nullable=False)
     batch_number = Column(String(50), nullable=False)
     quantity_produced = Column(Integer, nullable=False)

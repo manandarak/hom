@@ -11,7 +11,6 @@ from src.app.v1 import (
     geography,
     product,
 )
-from fastapi import APIRouter, Depends, HTTPException, status
 from src.app.core.config import settings
 from src.app.v1 import partner
 from src.app.v1 import finance
@@ -19,7 +18,7 @@ from src.app.v1 import finance
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
-    description="Backend system for HOM Distribution - Factory to End Consumer"
+    description="Backend system for House of Malhotra"
 )
 
 

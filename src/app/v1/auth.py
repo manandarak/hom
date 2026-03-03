@@ -7,9 +7,9 @@ from src.app.core.security import create_access_token
 
 router = APIRouter()
 
+
 @router.post("/login")
 def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
-
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -17,9 +17,14 @@ def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = 
             detail="Incorrect username or password",
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated or suspended.",
+        )
+
     access_token = create_access_token(subject=user.username)
 
-    # Extract permissions for the frontend to manage UI state
     permissions = []
     role_name = "Unknown"
     if user.role:
