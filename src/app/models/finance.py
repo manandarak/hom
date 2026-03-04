@@ -14,7 +14,7 @@ class FinancialLedger(Base):
     transaction_type = Column(String(50), nullable=False)
     reference_document = Column(String(100))
 
-
+    credit_amount = Column(DECIMAL(10,2), nullable=False)
     debit_amount = Column(DECIMAL(12, 2), default=0.00)
     closing_balance = Column(DECIMAL(12, 2), nullable=False)
     remarks = Column(String(255), nullable=True)

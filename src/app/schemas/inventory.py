@@ -11,6 +11,7 @@ class StockUpdate(BaseModel):
     quantity_change: int
     transaction_type: str
     reference_document: str
+    batch_number : str
 
 class StockLedgerRead(BaseModel):
     id: int

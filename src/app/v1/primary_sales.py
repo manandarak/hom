@@ -60,9 +60,6 @@ def get_all_primary_orders(
     elif role_name == "Retailer":
         return []
 
-    # --- CRITICAL FIX: Safe Join Mapping for Primary Orders ---
-    # We figure out which SuperStockists and Distributors the Internal User is allowed to see,
-    # then we only fetch Primary Orders going to those specific IDs.
 
     allowed_ss_query = db.query(SuperStockist.id)
     allowed_dist_query = db.query(Distributor.id)
@@ -75,17 +72,15 @@ def get_all_primary_orders(
 
     conditions = []
     if ss_ids:
-        # Include orders going to allowed Super Stockists
         conditions.append(and_(PrimaryOrder.type == 'FACTORY_TO_SS', PrimaryOrder.to_entity_id.in_(ss_ids)))
     if dist_ids:
-        # Include orders going to allowed Distributors
         conditions.append(
             and_(PrimaryOrder.type.in_(['FACTORY_TO_DB', 'SS_TO_DB']), PrimaryOrder.to_entity_id.in_(dist_ids)))
 
     if conditions:
         query = query.filter(or_(*conditions))
     else:
-        return []  # User has no entities in their assigned territory
+        return []
 
     return query.order_by(PrimaryOrder.id.desc()).all()
 

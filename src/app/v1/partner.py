@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from src.app.core.database import get_db
 
-# --- SECURITY & RBAC IMPORTS ---
 from src.app.core.security import get_current_user, check_permissions
 from src.app.models.user import User
 from src.app.services.permission_service import PermissionService
@@ -20,9 +19,6 @@ from src.app.crud.partner import (
 
 router = APIRouter()
 
-# ==========================================
-# SUPER STOCKISTS
-# ==========================================
 @router.post("/super-stockists", response_model=SuperStockistRead, status_code=status.HTTP_201_CREATED)
 def add_super_stockist(
         ss_in: SuperStockistCreate,
@@ -43,21 +39,18 @@ def list_super_stockists(
     user_perms = [p.name for p in current_user.role.permissions]
     if "manage_roles" in user_perms: return query.all()
 
-    # Partners
     if current_user.role.name == "SuperStockist":
         return query.filter(SuperStockist.user_id == current_user.id).all()
     elif current_user.role.name == "Distributor":
         dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if dist and dist.parent_ss_id:
             return query.filter(SuperStockist.id == dist.parent_ss_id).all()
-        # Secure Open Market Fallback
         if dist and dist.zone_id:
             return query.filter(SuperStockist.zone_id == dist.zone_id).all()
-        return []  # Fail closed if no geo mapping
+        return []
     elif current_user.role.name == "Retailer":
         return []
 
-    # Internal Teams using Smart Cascade
     return PermissionService.apply_geo_filter(query, SuperStockist, current_user).all()
 
 
@@ -68,7 +61,6 @@ def update_super_stockist(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, SuperStockist, ss_id)
 
     db_ss = db.query(SuperStockist).filter(SuperStockist.id == ss_id).first()
@@ -90,7 +82,6 @@ def delete_super_stockist(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, SuperStockist, ss_id)
 
     db_ss = db.query(SuperStockist).filter(SuperStockist.id == ss_id).first()
@@ -101,10 +92,6 @@ def delete_super_stockist(
     return None
 
 
-
-# ==========================================
-# DISTRIBUTORS
-# ==========================================
 @router.post("/distributors", response_model=DistributorRead, status_code=status.HTTP_201_CREATED)
 def add_distributor(
         dist_in: DistributorCreate,
@@ -134,12 +121,10 @@ def list_distributors(
         ret = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
         if ret and ret.linked_distributor_id:
             return query.filter(Distributor.id == ret.linked_distributor_id).all()
-        # Secure Open Market Fallback
         if ret and ret.state_id:
             return query.filter(Distributor.state_id == ret.state_id).all()
-        return []  # Fail closed
+        return []
 
-    # Internal Teams using Smart Cascade
     return PermissionService.apply_geo_filter(query, Distributor, current_user).all()
 
 
@@ -150,7 +135,6 @@ def update_distributor(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, Distributor, dist_id)
 
     db_dist = db.query(Distributor).filter(Distributor.id == dist_id).first()
@@ -161,7 +145,6 @@ def update_distributor(
     for key, value in update_data.items():
         setattr(db_dist, key, value)
 
-    # Re-stamp Geography if State changes
     if "state_id" in update_data and update_data["state_id"]:
         state = db.query(State).filter(State.id == update_data["state_id"]).first()
         if state:
@@ -178,7 +161,6 @@ def delete_distributor(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, Distributor, dist_id)
 
     db_dist = db.query(Distributor).filter(Distributor.id == dist_id).first()
@@ -189,9 +171,6 @@ def delete_distributor(
     return None
 
 
-# ==========================================
-# RETAILERS
-# ==========================================
 @router.post("/retailers", response_model=RetailerRead, status_code=status.HTTP_201_CREATED)
 def add_retailer(
         ret_in: RetailerCreate,
@@ -220,7 +199,6 @@ def list_retailers(
     elif current_user.role.name == "SuperStockist":
         return []
 
-    # Internal Teams using Smart Cascade
     return PermissionService.apply_geo_filter(query, Retailer, current_user).all()
 
 
@@ -231,7 +209,6 @@ def update_retailer(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, Retailer, ret_id)
 
     retailer = db.query(Retailer).filter(Retailer.id == ret_id).first()
@@ -242,7 +219,6 @@ def update_retailer(
     for key, value in update_data.items():
         setattr(retailer, key, value)
 
-    # Re-stamp Geography if Territory changes
     if "territory_id" in update_data and update_data["territory_id"]:
         territory = db.query(Territory).filter(Territory.id == update_data["territory_id"]).first()
         if territory:
@@ -268,7 +244,6 @@ def delete_retailer(
         db: Session = Depends(get_db),
         current_user: User = Depends(check_permissions("manage_partners"))
 ):
-    # CRITICAL FIX: Verify Geography Jurisdiction
     PermissionService.verify_internal_jurisdiction(db, current_user, Retailer, ret_id)
 
     db_ret = db.query(Retailer).filter(Retailer.id == ret_id).first()

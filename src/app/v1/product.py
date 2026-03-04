@@ -45,7 +45,6 @@ def update_product(
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Update only the fields that were provided in the request
     update_data = product_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_product, key, value)

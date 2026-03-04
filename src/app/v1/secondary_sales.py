@@ -18,7 +18,6 @@ from src.app.models.geography import Territory, Area, Region, State
 router = APIRouter()
 
 
-# --- SECURITY HELPER: Prevent Execution Spoofing ---
 def verify_secondary_ownership(db: Session, order: SecondaryOrder, current_user: User):
     role_name = current_user.role.name if current_user.role else ""
     if role_name == "Distributor":
@@ -39,7 +38,6 @@ def record_secondary_sale(
 ):
     """Stage 1: Initialize order as PENDING."""
 
-    # SECURITY: Prevent a Retailer/Distributor from placing an order for someone else
     role_name = current_user.role.name if current_user.role else ""
     if role_name == "Distributor":
         dist = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
@@ -61,18 +59,15 @@ def record_secondary_sale(
         if not distributor:
             raise HTTPException(status_code=404, detail="Distributor not found.")
 
-        # (Existing GST mismatch and calculation logic)
         total_invoice_amount = Decimal("0.00")
         for item in sale_in.items:
             product = db.query(ProductMaster).filter(ProductMaster.id == item.product_id).first()
             base_item_amount = Decimal(str(item.quantity)) * Decimal(str(product.base_price))
-            # Assuming retailer state is same as territory state for now, but fetched properly below
             tax_details = TaxService.calculate_gst(base_item_amount, Decimal(str(product.gst_percent)),
                                                    distributor.state_id, retailer.state_id if hasattr(retailer,
                                                                                                       'state_id') else distributor.state_id)
             total_invoice_amount += tax_details["final_amount"]
 
-        # --- WALK UP THE GEOGRAPHIC CHAIN ---
         territory_id = retailer.territory_id
         area_id = None
         region_id = None
@@ -88,19 +83,16 @@ def record_secondary_sale(
                     region_id = area.region_id
                     region = db.query(Region).filter(Region.id == region_id).first()
                     if region:
-                        # State is already known from Distributor, but we can verify Zone
                         state = db.query(State).filter(State.id == state_id).first()
                         if state:
                             zone_id = state.zone_id
 
-        # Now include the stamps when creating the order!
         db_order = SecondaryOrder(
             distributor_id=sale_in.distributor_id,
             retailer_id=sale_in.retailer_id,
             total_amount=total_invoice_amount,
             status="PENDING",
             order_date=datetime.now().date(),
-            # THE FAT STAMPS:
             zone_id=zone_id,
             state_id=state_id,
             region_id=region_id,
@@ -162,12 +154,10 @@ def dispatch_secondary_order(
 
         invoice_ref = f"INV-SEC-{order.id}"
 
-        # 1. Deduct Stock from Distributor (Since it has left their warehouse)
         for item in order.items:
             StockService.update_stock(db, "Distributor", order.distributor_id, item.product_id, item.batch_number,
                                       -item.quantity_units, invoice_ref, "SEC_DISPATCH_OUT")
 
-        # 2. Record Financial Receivable (Retailer now officially owes the money)
         FinanceService.record_transaction(db, "Retailer", order.retailer_id, "INVOICE", order.total_amount, invoice_ref)
 
         order.status = "DISPATCHED"
@@ -195,7 +185,6 @@ def receive_secondary_order(
 
         invoice_ref = f"INV-SEC-{order.id}"
 
-        # 1. Add Stock to Retailer (Since it arrived at their shop)
         for item in order.items:
             StockService.update_stock(db, "Retailer", order.retailer_id, item.product_id, item.batch_number,
                                       item.quantity_units, invoice_ref, "SEC_RECEIVE_IN")
@@ -220,15 +209,12 @@ def cancel_secondary_order(
         if not order:
             raise HTTPException(status_code=404, detail="Secondary Order not found")
 
-        # SECURITY: Verify ownership
         verify_secondary_ownership(db, order, current_user)
 
-        # If it was already dispatched, revert stock and finances
         if order.status in ["DISPATCHED", "RECEIVED"]:
             for item in order.items:
                 StockService.update_stock(db, "Distributor", order.distributor_id, item.product_id, item.batch_number,
                                           item.quantity_units, f"CNCL-{order.id}", "CANCEL_OUT")
-                # Only deduct retailer if they had already received it
                 if order.status == "RECEIVED":
                     StockService.update_stock(db, "Retailer", order.retailer_id, item.product_id, item.batch_number,
                                               -item.quantity_units, f"CNCL-{order.id}", "CANCEL_IN")
@@ -249,7 +235,6 @@ def get_all_secondary_orders(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    # Quick manual check to ensure they have at least one viewing permission
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
     is_admin = "manage_roles" in user_perms
 
@@ -263,11 +248,9 @@ def get_all_secondary_orders(
 
     role_name = current_user.role.name
 
-    # 1. Admin gets everything
     if is_admin or "view_all_orders" in user_perms:
         pass
 
-    # 2. Partners strictly see their own entity's orders (Fail-Closed)
     elif role_name == "Distributor":
         distributor = db.query(Distributor).filter(Distributor.user_id == current_user.id).first()
         if not distributor:
@@ -283,18 +266,13 @@ def get_all_secondary_orders(
     elif role_name == "SuperStockist":
         return []
 
-    # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     else:
-        # THE SAFE JOIN FIX: We join the Retailer table to ensure apply_geo_filter can find zone_id, state_id, etc.
         query = query.join(Retailer, SecondaryOrder.retailer_id == Retailer.id)
         query = PermissionService.apply_geo_filter(query, Retailer, current_user)
-        # CRITICAL FIX: Ensure we only return the SecondaryOrder object, not the Joined tuple
         query = query.with_entities(SecondaryOrder)
 
-    # Execute final secured query
     orders = query.order_by(SecondaryOrder.id.desc()).all()
 
-    # Format result
     result = []
     for o in orders:
         items_data = [{"product_id": i.product_id, "quantity_units": i.quantity_units, "batch_number": i.batch_number}

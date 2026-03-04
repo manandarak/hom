@@ -26,7 +26,7 @@ from src.app.crud.tertiary_sales import (
 router = APIRouter()
 
 
-# --- SECURITY HELPER: Prevent Execution Spoofing ---
+
 def verify_tertiary_ownership(db: Session, order: TertiaryOrder, current_user: User):
     role_name = current_user.role.name if current_user.role else ""
     if role_name == "Retailer":
@@ -41,7 +41,6 @@ def get_all_tertiary_orders(
         current_user: User = Depends(get_current_user)
 ):
     """Fetch Tertiary Orders scoped dynamically based on user role and geography."""
-    # SECURED: Ensure they have at least one viewing permission
     user_perms = [p.name for p in current_user.role.permissions] if current_user.role else []
     is_admin = "manage_roles" in user_perms
 
@@ -56,11 +55,9 @@ def get_all_tertiary_orders(
 
     role_name = current_user.role.name
 
-    # 1. Admin / Global Viewers get everything
     if is_admin or "view_all_orders" in user_perms:
         return query.order_by(TertiaryOrder.id.desc()).all()
 
-    # 2. Partners strictly see ONLY their own firm's orders
     if role_name == "Retailer":
         retailer = db.query(Retailer).filter(Retailer.user_id == current_user.id).first()
         if not retailer: return []  # Fail-Closed
@@ -68,15 +65,11 @@ def get_all_tertiary_orders(
         return query.order_by(TertiaryOrder.id.desc()).all()
 
     elif role_name in ["SuperStockist", "Distributor"]:
-        # Tertiary sales are between Retailer and Consumer.
         return []
 
-    # 3. Internal Teams (ZSM, RSM, ASM, SO) scoped by Geography
     else:
-        # THE SAFE JOIN FIX
         query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
         query = PermissionService.apply_geo_filter(query, Retailer, current_user)
-        # CRITICAL FIX: Ensure we only return the TertiaryOrder object, not the Joined tuple
         query = query.with_entities(TertiaryOrder)
         return query.order_by(TertiaryOrder.id.desc()).all()
 
@@ -102,7 +95,6 @@ def get_my_pending_requests(
 
     query = query.join(Retailer, TertiaryOrder.fulfilled_by_retailer_id == Retailer.id)
     query = PermissionService.apply_geo_filter(query, Retailer, current_user)
-    # CRITICAL FIX: Extract entity
     query = query.with_entities(TertiaryOrder)
     return query.order_by(TertiaryOrder.id.desc()).all()
 
@@ -117,7 +109,6 @@ def record_tertiary_sale(
     Consumer or Retailer logs a sale.
     This is just a 'request' until approved by the Sales Officer (SO).
     """
-    # SECURITY: Prevent Retailer from spoofing an order for another Retailer
     role_name = current_user.role.name if current_user.role else ""
     retailer = db.query(Retailer).filter(Retailer.id == sale_in.fulfilled_by_retailer_id).first()
 
@@ -127,7 +118,6 @@ def record_tertiary_sale(
 
     new_sale = create_tertiary_sale(db, sale_in)
 
-    # FAT STAMPING HOTFIX: Stamp the geo data onto the order immediately after creation
     if retailer:
         new_sale.zone_id = retailer.zone_id
         new_sale.state_id = retailer.state_id
